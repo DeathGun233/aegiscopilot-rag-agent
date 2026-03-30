@@ -1,0 +1,15 @@
+@echo off
+setlocal
+
+cd /d "%~dp0"
+
+if not exist ".venv\Scripts\python.exe" (
+  echo [AegisCopilot] Creating virtual environment...
+  py -3.11 -m venv .venv
+)
+
+echo [AegisCopilot] Installing backend dependencies...
+".venv\Scripts\python.exe" -m pip install --upgrade pip
+".venv\Scripts\python.exe" -m pip install -e .
+
+echo [AegisCopilot] Setup complete.

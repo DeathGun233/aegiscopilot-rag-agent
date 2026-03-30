@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+from uuid import uuid4
+
+from pydantic import BaseModel, Field
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Intent(str, Enum):
+    chitchat = "chitchat"
+    knowledge_qa = "knowledge_qa"
+    task = "task"
+
+
+class WorkflowStep(str, Enum):
+    intent_detect = "intent_detect"
+    retrieve_context = "retrieve_context"
+    plan_response = "plan_response"
+    tool_or_answer = "tool_or_answer"
+    response_grounding_check = "response_grounding_check"
+    final_response = "final_response"
+
+
+class MessageRole(str, Enum):
+    user = "user"
+    assistant = "assistant"
+    system = "system"
+
+
+class Message(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    role: MessageRole
+    content: str
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Conversation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    title: str = "New conversation"
+    messages: list[Message] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Document(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    title: str
+    source_type: str = "text"
+    department: str = "general"
+    version: str = "v1"
+    content: str
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    indexed_at: datetime | None = None
+
+
+class Chunk(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    document_id: str
+    document_title: str
+    text: str
+    chunk_index: int
+    tokens: list[str]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RetrievalResult(BaseModel):
+    chunk_id: str
+    document_id: str
+    document_title: str
+    text: str
+    score: float
+    source: str
+    display_source: str = ""
+
+
+class ModelOption(BaseModel):
+    id: str
+    label: str
+    tier: str
+    description: str
+    recommended_for: str
+
+
+class ModelCatalog(BaseModel):
+    provider: str
+    base_url: str
+    active_model: str
+    api_key_configured: bool
+    options: list[ModelOption] = Field(default_factory=list)
+
+
+class AgentTask(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    conversation_id: str
+    query: str
+    intent: Intent
+    steps: list[WorkflowStep]
+    trace: list[dict[str, Any]] = Field(default_factory=list)
+    final_answer: str = ""
+    citations: list[RetrievalResult] = Field(default_factory=list)
+    route_reason: str = ""
+    provider: str = "mock"
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class EvaluationCase(BaseModel):
+    id: str
+    question: str
+    expected_keywords: list[str]
+    expected_document: str
+
+
+class EvaluationRun(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    cases: int
+    answer_rate: float
+    citation_hit_rate: float
+    keyword_hit_rate: float
+    details: list[dict[str, Any]]
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class SystemStats(BaseModel):
+    documents: int
+    indexed_chunks: int
+    conversations: int
+    tasks: int
+    retrieval_top_k: int
+    grounding_threshold: float
+    llm_provider: str
+    llm_model: str
+    api_key_configured: bool = False

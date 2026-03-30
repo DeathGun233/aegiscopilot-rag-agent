@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+import json
+from collections import OrderedDict
+from pathlib import Path
+from typing import Iterable
+
+from .models import AgentTask, Chunk, Conversation, Document, Message
+
+
+class JsonStore:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def load(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def save(self, records: list[dict]) -> None:
+        self.path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+class ConversationRepository:
+    def __init__(self, store: JsonStore | None = None) -> None:
+        self._store: OrderedDict[str, Conversation] = OrderedDict()
+        self.store = store
+        if self.store:
+            for record in self.store.load():
+                conversation = Conversation.model_validate(record)
+                self._store[conversation.id] = conversation
+
+    def create(self, title: str = "New conversation") -> Conversation:
+        conversation = Conversation(title=title)
+        self._store[conversation.id] = conversation
+        self._persist()
+        return conversation
+
+    def get(self, conversation_id: str) -> Conversation | None:
+        return self._store.get(conversation_id)
+
+    def list(self) -> list[Conversation]:
+        return list(self._store.values())
+
+    def delete(self, conversation_id: str) -> bool:
+        if conversation_id not in self._store:
+            return False
+        del self._store[conversation_id]
+        self._persist()
+        return True
+
+    def append_message(self, conversation_id: str, message: Message) -> Conversation:
+        conversation = self._store[conversation_id]
+        conversation.messages.append(message)
+        conversation.updated_at = message.created_at
+        self._persist()
+        return conversation
+
+    def _persist(self) -> None:
+        if self.store:
+            self.store.save([item.model_dump(mode="json") for item in self._store.values()])
+
+
+class DocumentRepository:
+    def __init__(self, documents_store: JsonStore | None = None, chunks_store: JsonStore | None = None) -> None:
+        self._documents: OrderedDict[str, Document] = OrderedDict()
+        self._chunks: OrderedDict[str, Chunk] = OrderedDict()
+        self.documents_store = documents_store
+        self.chunks_store = chunks_store
+        if self.documents_store:
+            for record in self.documents_store.load():
+                document = Document.model_validate(record)
+                self._documents[document.id] = document
+        if self.chunks_store:
+            for record in self.chunks_store.load():
+                chunk = Chunk.model_validate(record)
+                self._chunks[chunk.id] = chunk
+
+    def upsert_document(self, document: Document) -> Document:
+        self._documents[document.id] = document
+        self._persist_documents()
+        return document
+
+    def get_document(self, document_id: str) -> Document | None:
+        return self._documents.get(document_id)
+
+    def list_documents(self) -> list[Document]:
+        return list(self._documents.values())
+
+    def delete_document(self, document_id: str) -> bool:
+        if document_id not in self._documents:
+            return False
+        del self._documents[document_id]
+        for chunk_id, chunk in list(self._chunks.items()):
+            if chunk.document_id == document_id:
+                del self._chunks[chunk_id]
+        self._persist_documents()
+        self._persist_chunks()
+        return True
+
+    def replace_chunks(self, document_id: str, chunks: Iterable[Chunk]) -> int:
+        for chunk_id, chunk in list(self._chunks.items()):
+            if chunk.document_id == document_id:
+                del self._chunks[chunk_id]
+        count = 0
+        for chunk in chunks:
+            self._chunks[chunk.id] = chunk
+            count += 1
+        self._persist_chunks()
+        return count
+
+    def list_chunks(self) -> list[Chunk]:
+        return list(self._chunks.values())
+
+    def _persist_documents(self) -> None:
+        if self.documents_store:
+            self.documents_store.save([item.model_dump(mode="json") for item in self._documents.values()])
+
+    def _persist_chunks(self) -> None:
+        if self.chunks_store:
+            self.chunks_store.save([item.model_dump(mode="json") for item in self._chunks.values()])
+
+
+class TaskRepository:
+    def __init__(self, store: JsonStore | None = None) -> None:
+        self._store: OrderedDict[str, AgentTask] = OrderedDict()
+        self.store = store
+        if self.store:
+            for record in self.store.load():
+                task = AgentTask.model_validate(record)
+                self._store[task.id] = task
+
+    def save(self, task: AgentTask) -> AgentTask:
+        self._store[task.id] = task
+        self._persist()
+        return task
+
+    def get(self, task_id: str) -> AgentTask | None:
+        return self._store.get(task_id)
+
+    def list(self) -> list[AgentTask]:
+        return list(self._store.values())
+
+    def _persist(self) -> None:
+        if self.store:
+            self.store.save([item.model_dump(mode="json") for item in self._store.values()])
