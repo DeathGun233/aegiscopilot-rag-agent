@@ -33,6 +33,11 @@ class MessageRole(str, Enum):
     system = "system"
 
 
+class UserRole(str, Enum):
+    admin = "admin"
+    member = "member"
+
+
 class Message(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     role: MessageRole
@@ -94,6 +99,13 @@ class ModelCatalog(BaseModel):
     active_model: str
     api_key_configured: bool
     options: list[ModelOption] = Field(default_factory=list)
+
+
+class User(BaseModel):
+    id: str
+    name: str
+    role: UserRole
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class AgentTask(BaseModel):

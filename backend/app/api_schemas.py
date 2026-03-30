@@ -10,6 +10,7 @@ from .models import (
     Message,
     ModelCatalog,
     RetrievalResult,
+    User,
     SystemStats,
 )
 
@@ -72,6 +73,18 @@ class ModelSelectRequest(BaseModel):
 
 class ModelCatalogResponse(BaseModel):
     catalog: ModelCatalog
+
+
+class UserSummary(User):
+    pass
+
+
+class UserListResponse(BaseModel):
+    users: list[UserSummary]
+
+
+class CurrentUserResponse(BaseModel):
+    user: UserSummary
 
 
 class EvaluationResponse(BaseModel):

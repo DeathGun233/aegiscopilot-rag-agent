@@ -5,7 +5,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Iterable
 
-from .models import AgentTask, Chunk, Conversation, Document, Message
+from .models import AgentTask, Chunk, Conversation, Document, Message, User, UserRole
 
 
 class JsonStore:
@@ -141,6 +141,42 @@ class TaskRepository:
 
     def list(self) -> list[AgentTask]:
         return list(self._store.values())
+
+    def _persist(self) -> None:
+        if self.store:
+            self.store.save([item.model_dump(mode="json") for item in self._store.values()])
+
+
+class UserRepository:
+    def __init__(self, store: JsonStore | None = None) -> None:
+        self._store: OrderedDict[str, User] = OrderedDict()
+        self.store = store
+        if self.store and self.store.path.exists():
+            for record in self.store.load():
+                user = User.model_validate(record)
+                self._store[user.id] = user
+        if not self._store:
+            self._seed_defaults()
+            self._persist()
+
+    def _seed_defaults(self) -> None:
+        for user in (
+            User(id="admin", name="admin", role=UserRole.admin),
+            User(id="member", name="member", role=UserRole.member),
+        ):
+            self._store[user.id] = user
+
+    def get(self, user_id: str) -> User | None:
+        return self._store.get(user_id)
+
+    def list(self) -> list[User]:
+        return list(self._store.values())
+
+    def ensure(self, user_id: str) -> User:
+        user = self.get(user_id)
+        if user is None:
+            raise KeyError(user_id)
+        return user
 
     def _persist(self) -> None:
         if self.store:

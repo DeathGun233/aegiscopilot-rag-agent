@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api_schemas import (
@@ -16,13 +16,15 @@ from .api_schemas import (
     IndexResponse,
     ModelCatalogResponse,
     ModelSelectRequest,
+    CurrentUserResponse,
+    UserListResponse,
     RetrievalPreviewRequest,
     RetrievalPreviewResponse,
     SystemStatsResponse,
 )
 from .config import settings
-from .deps import get_container
-from .models import Message, MessageRole
+from .deps import get_container, get_current_user
+from .models import Message, MessageRole, User, UserRole
 from .seed import main as seed_sample_documents
 from .services.evaluation import EvaluationService
 from .services.extraction import ExtractionError
@@ -60,10 +62,26 @@ def health() -> dict[str, str]:
     return {"status": "ok", "provider": str(runtime["provider"]), "model": str(runtime["model"])}
 
 
+def _require_admin(user: User) -> None:
+    if user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="admin access required")
+
+
 @app.get("/system/stats", response_model=SystemStatsResponse)
 def get_system_stats() -> SystemStatsResponse:
     container = get_container()
     return SystemStatsResponse(stats=container.system_service.get_stats())
+
+
+@app.get("/users", response_model=UserListResponse)
+def list_users() -> UserListResponse:
+    container = get_container()
+    return UserListResponse(users=container.user_service.list_users())
+
+
+@app.get("/users/me", response_model=CurrentUserResponse)
+def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
+    return CurrentUserResponse(user=current_user)
 
 
 @app.get("/models", response_model=ModelCatalogResponse)
@@ -73,8 +91,12 @@ def get_model_catalog() -> ModelCatalogResponse:
 
 
 @app.post("/models/select", response_model=ModelCatalogResponse)
-def select_model(request: ModelSelectRequest) -> ModelCatalogResponse:
+def select_model(
+    request: ModelSelectRequest,
+    current_user: User = Depends(get_current_user),
+) -> ModelCatalogResponse:
     container = get_container()
+    _require_admin(current_user)
     try:
         catalog = container.runtime_model_service.select_model(request.model_id)
     except ValueError as exc:
@@ -135,15 +157,23 @@ def list_documents() -> DocumentListResponse:
 
 
 @app.post("/documents", response_model=dict)
-def create_document(request: DocumentCreateRequest) -> dict:
+def create_document(
+    request: DocumentCreateRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
     container = get_container()
+    _require_admin(current_user)
     document = container.document_service.create_document(**request.model_dump())
     return {"document": document}
 
 
 @app.delete("/documents/{document_id}", response_model=dict)
-def delete_document(document_id: str) -> dict:
+def delete_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
     container = get_container()
+    _require_admin(current_user)
     deleted = container.document_service.delete_document(document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="document not found")
@@ -151,8 +181,12 @@ def delete_document(document_id: str) -> dict:
 
 
 @app.post("/documents/upload", response_model=dict)
-async def upload_document(file: UploadFile = File(...)) -> dict:
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> dict:
     container = get_container()
+    _require_admin(current_user)
     raw = await file.read()
     try:
         content = container.extraction_service.extract(file.filename or "uploaded-file", raw)
@@ -171,8 +205,12 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/documents/index", response_model=IndexResponse)
-def index_document(payload: dict[str, str]) -> IndexResponse:
+def index_document(
+    payload: dict[str, str],
+    current_user: User = Depends(get_current_user),
+) -> IndexResponse:
     container = get_container()
+    _require_admin(current_user)
     document_id = payload.get("document_id")
     if not document_id:
         raise HTTPException(status_code=400, detail="document_id is required")
