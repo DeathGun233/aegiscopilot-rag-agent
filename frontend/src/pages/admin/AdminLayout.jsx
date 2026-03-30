@@ -1,11 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 const adminTabs = [
-  { to: "/admin/overview", label: "概览" },
-  { to: "/admin/knowledge", label: "知识库" },
-  { to: "/admin/evaluation", label: "评估" },
-  { to: "/admin/users", label: "用户" },
-  { to: "/admin/system", label: "系统" },
+  { to: "/admin/overview", label: "Overview" },
+  { to: "/admin/knowledge", label: "Knowledge" },
+  { to: "/admin/evaluation", label: "Evaluation" },
+  { to: "/admin/users", label: "Users" },
+  { to: "/admin/system", label: "System" },
 ];
 
 export function AdminLayout() {
@@ -14,12 +14,12 @@ export function AdminLayout() {
       <div className="admin-header-card">
         <div>
           <span className="eyebrow">Admin Console</span>
-          <h2>企业知识库管理后台</h2>
-          <p>把聊天入口和管理后台分开，知识库、评估、用户和系统设置都在这里统一处理。</p>
+          <h2>Knowledge and operations backend</h2>
+          <p>Separate chat usage from administration so knowledge, evaluation, users, and system settings stay organized.</p>
         </div>
       </div>
 
-      <nav className="admin-tabs" aria-label="后台导航">
+      <nav className="admin-tabs" aria-label="Admin tabs">
         {adminTabs.map((item) => (
           <NavLink
             key={item.to}

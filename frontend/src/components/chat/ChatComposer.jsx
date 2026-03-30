@@ -11,7 +11,7 @@ export function ChatComposer({
       <textarea
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="输入需要分析的问题，例如：生产发布前需要准备什么？"
+        placeholder="Ask a document-grounded question, for example: 生产发布前需要准备什么？"
         rows={5}
       />
       <div className="composer-toolbar">
@@ -23,7 +23,7 @@ export function ChatComposer({
           ))}
         </div>
         <button type="submit" className="send-button" disabled={isStreaming}>
-          {isStreaming ? "生成中..." : "发送"}
+          {isStreaming ? "Generating..." : "Send"}
         </button>
       </div>
       {streamStatus ? <p className="stream-text">{streamStatus}</p> : null}

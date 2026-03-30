@@ -6,8 +6,8 @@ export function MessageList({ messages, citationMap }) {
   if (!messages.length) {
     return (
       <div className="empty-block">
-        <strong>开始第一轮问答</strong>
-        <p>上传企业文档后，在这里围绕制度、流程、产品或合规问题进行多轮对话。</p>
+        <strong>No messages yet</strong>
+        <p>Upload knowledge documents first, then use this workspace for grounded multi-turn Q&amp;A.</p>
       </div>
     );
   }
@@ -19,7 +19,7 @@ export function MessageList({ messages, citationMap }) {
           key={messageKey(message, index)}
           className={message.role === "user" ? "message-card user" : "message-card assistant"}
         >
-          <span className="message-role">{message.role === "user" ? "用户" : "助手"}</span>
+          <span className="message-role">{message.role === "user" ? "User" : "Assistant"}</span>
           <p>{message.content}</p>
           {message.role === "assistant" && citationMap[message.id]?.length ? (
             <div className="citation-inline">

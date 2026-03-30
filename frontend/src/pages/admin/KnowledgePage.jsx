@@ -1,246 +1,133 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchJson } from "../../lib/api";
-import { formatDateTime, truncate } from "../../lib/format";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
+function sourceLabel(document) {
+  const mapping = {
+    upload: "Upload",
+    seed: "Seed",
+    text: "Manual",
+    pdf: "PDF",
+    docx: "Word",
+    markdown: "Markdown",
+  };
+  return mapping[document.source_type] || document.source_type;
+}
+
 export function KnowledgePage() {
-  const { currentUserId, isAdmin, refreshStats, setGlobalNotice } = useAppContext();
-  const [documents, setDocuments] = useState([]);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-  const [detail, setDetail] = useState(null);
+  const { currentUser, deleteDocument, documents, setGlobalNotice, uploadDocumentFile } = useAppContext();
   const [keyword, setKeyword] = useState("");
-  const [department, setDepartment] = useState("all");
-  const [indexState, setIndexState] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  async function loadDocuments() {
-    setLoading(true);
-    const data = await fetchJson("/documents", { userId: currentUserId });
-    setDocuments(data.documents);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadDocuments().catch((error) => {
-      setGlobalNotice(error.message || "知识库加载失败");
-      setLoading(false);
-    });
-  }, [currentUserId]);
-
-  useEffect(() => {
-    if (!selectedDocument) {
-      setDetail(null);
-      return;
+  const visibleDocuments = documents.filter((document) => {
+    if (!keyword.trim()) {
+      return true;
     }
-    fetchJson(`/documents/${selectedDocument}`, { userId: currentUserId })
-      .then((data) => setDetail(data))
-      .catch((error) => setGlobalNotice(error.message || "文档详情加载失败"));
-  }, [currentUserId, selectedDocument]);
+    const haystack = [document.title, document.department, document.source_type, ...(document.tags || [])]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(keyword.trim().toLowerCase());
+  });
 
-  const departmentOptions = useMemo(
-    () => ["all", ...new Set(documents.map((item) => item.department).filter(Boolean))],
-    [documents],
-  );
-
-  const filteredDocuments = useMemo(() => {
-    const needle = keyword.trim().toLowerCase();
-    return documents.filter((document) => {
-      if (department !== "all" && document.department !== department) {
-        return false;
-      }
-      if (indexState === "indexed" && !document.indexed) {
-        return false;
-      }
-      if (indexState === "pending" && document.indexed) {
-        return false;
-      }
-      if (!needle) {
-        return true;
-      }
-      return [document.title, document.department, document.source_type, document.content_preview]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [department, documents, indexState, keyword]);
-
-  async function handleUploadDocument(event) {
+  async function handleUpload(event) {
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
-
-    const formData = new FormData();
-    formData.append("file", file);
-
+    setBusy(true);
+    setGlobalNotice(`Parsing and indexing ${file.name} ...`);
     try {
-      await fetchJson("/documents/upload", {
-        method: "POST",
-        body: formData,
-        userId: currentUserId,
-      });
-      setGlobalNotice(`文档已录入知识库：${file.name}`);
-      await loadDocuments();
-      await refreshStats();
+      const result = await uploadDocumentFile(file);
+      setGlobalNotice(`Imported ${result.document.title} with ${result.chunks_created} new chunks.`);
     } catch (error) {
-      setGlobalNotice(error.message || "文档上传失败");
+      setGlobalNotice(error.message || "Upload failed");
     } finally {
+      setBusy(false);
       event.target.value = "";
     }
   }
 
-  async function handleDeleteDocument(documentId) {
+  async function handleDelete(documentId) {
     try {
-      await fetchJson(`/documents/${documentId}`, {
-        method: "DELETE",
-        userId: currentUserId,
-      });
-      setGlobalNotice("文档已删除");
-      if (selectedDocument === documentId) {
-        setSelectedDocument(null);
-      }
-      await loadDocuments();
-      await refreshStats();
+      await deleteDocument(documentId);
+      setGlobalNotice("Document removed from the knowledge base.");
     } catch (error) {
-      setGlobalNotice(error.message || "文档删除失败");
+      setGlobalNotice(error.message || "Delete failed");
     }
   }
 
   return (
-    <div className="admin-content">
-      <section className="dashboard-hero knowledge-hero">
-        <div>
-          <span className="hero-pill">Knowledge Base</span>
-          <h2>知识库管理</h2>
-          <p>在后台统一完成文档上传、删除、索引查看与片段检查。</p>
-        </div>
-
-        <div className="hero-actions">
-          <label className="primary-action upload-button">
-            上传文档
+    <div className="admin-page-grid">
+      <section className="content-card wide">
+        <div className="card-head">
+          <div>
+            <span className="eyebrow">Knowledge Base</span>
+            <h3>Documents and index</h3>
+          </div>
+          <label className="primary-action">
+            Upload document
             <input
               type="file"
               accept=".txt,.md,.markdown,.pdf,.docx"
-              onChange={handleUploadDocument}
+              onChange={handleUpload}
               hidden
-              disabled={!isAdmin}
+              disabled={currentUser?.role !== "admin" || busy}
             />
           </label>
         </div>
-      </section>
 
-      <section className="admin-grid knowledge-layout">
-        <article className="panel-card">
-          <div className="filter-bar">
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索标题、部门或内容"
-            />
-            <select value={department} onChange={(event) => setDepartment(event.target.value)}>
-              {departmentOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item === "all" ? "全部部门" : item}
-                </option>
-              ))}
-            </select>
-            <select value={indexState} onChange={(event) => setIndexState(event.target.value)}>
-              <option value="all">全部状态</option>
-              <option value="indexed">已索引</option>
-              <option value="pending">未索引</option>
-            </select>
+        <label className="search-field">
+          <span>Search documents</span>
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="Search by title, department, source, or tags"
+          />
+        </label>
+
+        <div className="document-table">
+          <div className="document-table-head">
+            <span>Document</span>
+            <span>Department</span>
+            <span>Source</span>
+            <span>Index</span>
+            <span>Actions</span>
           </div>
 
-          <div className="data-table">
-            <div className="data-table-head">
-              <span>文档</span>
-              <span>部门</span>
-              <span>状态</span>
-              <span>来源</span>
-              <span>操作</span>
-            </div>
-
-            {loading ? (
-              <div className="table-empty">正在加载知识库...</div>
-            ) : filteredDocuments.length ? (
-              filteredDocuments.map((document) => (
-                <article
-                  key={document.id}
-                  className={
-                    selectedDocument === document.id ? "data-row active" : "data-row"
-                  }
-                  onClick={() => setSelectedDocument(document.id)}
-                >
-                  <div>
-                    <strong>{document.title}</strong>
-                    <small>{formatDateTime(document.indexed_at || document.created_at)}</small>
-                  </div>
-                  <span>{document.department}</span>
-                  <span className={document.indexed ? "state-badge indexed" : "state-badge pending"}>
-                    {document.indexed ? "已索引" : "未索引"}
-                  </span>
-                  <span>{document.source_type}</span>
+          {visibleDocuments.length ? (
+            visibleDocuments.map((document) => (
+              <article key={document.id} className="document-row">
+                <div>
+                  <Link to={`/admin/knowledge/${document.id}`} className="document-link">
+                    {document.title}
+                  </Link>
+                  <p>{document.content_preview || "No preview available."}</p>
+                </div>
+                <span>{document.department}</span>
+                <span>{sourceLabel(document)}</span>
+                <span>{document.chunk_count || 0} chunks</span>
+                <div className="row-actions">
+                  <Link to={`/admin/knowledge/${document.id}`} className="inline-link">
+                    View
+                  </Link>
                   <button
                     type="button"
                     className="danger-text"
-                    disabled={!isAdmin}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDeleteDocument(document.id);
-                    }}
+                    disabled={currentUser?.role !== "admin"}
+                    onClick={() => handleDelete(document.id)}
                   >
-                    删除
+                    Delete
                   </button>
-                </article>
-              ))
-            ) : (
-              <div className="table-empty">没有匹配的知识文档。</div>
-            )}
-          </div>
-        </article>
-
-        <aside className="panel-card detail-panel">
-          <div className="panel-head">
-            <div>
-              <span className="panel-kicker">Document Detail</span>
-              <h3>文档详情</h3>
-            </div>
-          </div>
-
-          {detail ? (
-            <div className="detail-stack">
-              <div className="detail-block">
-                <strong>{detail.document.title}</strong>
-                <p>{detail.document.source_label}</p>
-                <small>{detail.document.indexed_label || "未索引"}</small>
-              </div>
-
-              <div className="detail-block">
-                <span>内容预览</span>
-                <p>{truncate(detail.document.content_preview || detail.document.content, 240)}</p>
-              </div>
-
-              <div className="detail-block">
-                <span>片段列表</span>
-                <div className="chunk-list">
-                  {detail.chunks.length ? (
-                    detail.chunks.map((chunk) => (
-                      <article key={chunk.id} className="chunk-card">
-                        <strong>片段 {chunk.chunk_index + 1}</strong>
-                        <p>{chunk.text_preview}</p>
-                      </article>
-                    ))
-                  ) : (
-                    <p>当前文档还没有 chunk 详情。</p>
-                  )}
                 </div>
-              </div>
-            </div>
+              </article>
+            ))
           ) : (
-            <div className="table-empty">点击左侧文档查看详情和索引片段。</div>
+            <div className="empty-block">
+              <strong>No matching document</strong>
+              <p>Change the filter or upload a new file.</p>
+            </div>
           )}
-        </aside>
+        </div>
       </section>
     </div>
   );
