@@ -5,9 +5,9 @@ function messageKey(message, index) {
 export function MessageList({ messages, citationMap }) {
   if (!messages.length) {
     return (
-      <div className="empty-block">
-        <strong>No messages yet</strong>
-        <p>Upload knowledge documents first, then use this workspace for grounded multi-turn Q&amp;A.</p>
+      <div className="empty-thread">
+        <strong>从一个新问题开始</strong>
+        <p>系统会结合知识库内容和当前模型，给出更简洁的回答与引用依据。</p>
       </div>
     );
   }
@@ -19,10 +19,14 @@ export function MessageList({ messages, citationMap }) {
           key={messageKey(message, index)}
           className={message.role === "user" ? "message-card user" : "message-card assistant"}
         >
-          <span className="message-role">{message.role === "user" ? "User" : "Assistant"}</span>
-          <p>{message.content}</p>
+          <div className="message-meta">
+            <span className="message-role">{message.role === "user" ? "用户" : "助手"}</span>
+          </div>
+          <div className="message-content">
+            <p>{message.content}</p>
+          </div>
           {message.role === "assistant" && citationMap[message.id]?.length ? (
-            <div className="citation-inline">
+            <div className="citation-row">
               {citationMap[message.id].map((item) => (
                 <span key={item.chunk_id} className="citation-pill">
                   {item.display_source}

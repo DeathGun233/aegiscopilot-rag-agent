@@ -32,8 +32,7 @@ const scenarioCards = [
 
 export function ChatPage() {
   const navigate = useNavigate();
-  const params = useParams();
-  const { conversationId: routeConversationId } = params;
+  const { conversationId } = useParams();
   const { conversations, currentUserId, refreshConversations, refreshStats } = useAppContext();
   const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState("");
@@ -42,32 +41,32 @@ export function ChatPage() {
   const [citationMap, setCitationMap] = useState({});
 
   const currentConversation = useMemo(
-    () => conversations.find((item) => item.id === routeConversationId) || null,
-    [conversations, routeConversationId],
+    () => conversations.find((item) => item.id === conversationId) || null,
+    [conversations, conversationId],
   );
 
   useEffect(() => {
-    if (routeConversationId && currentConversation) {
+    if (conversationId && currentConversation) {
       setMessages(currentConversation.messages || []);
       setCitationMap({});
       setStreamStatus("");
       return;
     }
-    if (!routeConversationId) {
+    if (!conversationId) {
       setMessages([]);
       setCitationMap({});
       setStreamStatus("");
       return;
     }
 
-    fetchJson(`/conversations/${routeConversationId}`, { userId: currentUserId })
+    fetchJson(`/conversations/${conversationId}`, { userId: currentUserId })
       .then((data) => {
         setMessages(data.conversation.messages || []);
       })
       .catch(() => {
         navigate("/chat");
       });
-  }, [currentConversation, currentUserId, navigate, routeConversationId]);
+  }, [conversationId, currentConversation, currentUserId, navigate]);
 
   async function handleSendMessage(event) {
     event.preventDefault();
@@ -87,12 +86,12 @@ export function ChatPage() {
     setQuery("");
     setCitationMap((current) => ({ ...current, [assistantId]: [] }));
 
-    let nextConversationId = routeConversationId || null;
+    let nextConversationId = conversationId || null;
     let answer = "";
 
     try {
       await streamChat(
-        { query: trimmed, conversationId: routeConversationId },
+        { query: trimmed, conversationId },
         currentUserId,
         {
           onConversation(payload) {
@@ -123,7 +122,7 @@ export function ChatPage() {
       const nextConversations = await refreshConversations();
       await refreshStats();
       if (nextConversationId) {
-        navigate(`/chat/${nextConversationId}`);
+        navigate(`/chat/${nextConversationId}`, { replace: true });
         const synced = nextConversations.find((item) => item.id === nextConversationId);
         if (synced) {
           setMessages(synced.messages || []);

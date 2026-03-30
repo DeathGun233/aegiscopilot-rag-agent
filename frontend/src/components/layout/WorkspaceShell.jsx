@@ -1,10 +1,11 @@
+import { useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { formatDateTime, getConversationPreview, truncate } from "../../lib/format";
 
 const primaryNav = [
-  { to: "/chat", label: "Chat", hint: "User Q&A workspace" },
-  { to: "/admin/overview", label: "Admin", hint: "Knowledge and system control" },
+  { to: "/chat", label: "聊天", hint: "用户问答工作台" },
+  { to: "/admin/overview", label: "管理后台", hint: "知识库与系统配置" },
 ];
 
 export function WorkspaceShell({ children }) {
@@ -24,9 +25,23 @@ export function WorkspaceShell({ children }) {
     stats,
     users,
   } = useAppContext();
+  const [keyword, setKeyword] = useState("");
+
+  const filteredConversations = useMemo(() => {
+    const needle = keyword.trim().toLowerCase();
+    if (!needle) {
+      return conversations;
+    }
+    return conversations.filter((conversation) =>
+      [conversation.title, ...(conversation.messages || []).map((item) => item.content)]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [conversations, keyword]);
 
   async function handleCreateConversation() {
-    const conversation = await createConversation();
+    const conversation = await createConversation("新对话");
     navigate(`/chat/${conversation.id}`);
   }
 
@@ -39,48 +54,25 @@ export function WorkspaceShell({ children }) {
   }
 
   return (
-    <div className="shell-root">
-      <aside className="shell-sidebar">
+    <div className="workspace-shell">
+      <aside className="left-rail">
         <div className="brand-block">
-          <div className="brand-logo">A</div>
+          <div className="brand-badge">AI</div>
           <div>
             <strong>AegisCopilot</strong>
-            <p>Enterprise RAG Workspace</p>
+            <p>企业知识库智能助手</p>
           </div>
         </div>
 
-        <div className="quick-card">
-          <div className="quick-card-head">
-            <span>Quick start</span>
-            <button type="button" className="mini-button" onClick={handleCreateConversation}>
-              New
-            </button>
-          </div>
-          <button type="button" className="primary-quick-action" onClick={handleCreateConversation}>
-            <span className="action-icon">+</span>
-            <div>
-              <strong>New conversation</strong>
-              <small>Start a fresh knowledge-grounded chat</small>
-            </div>
-          </button>
-          <button
-            type="button"
-            className="ghost-quick-action"
-            onClick={() => navigate("/admin/knowledge")}
-          >
-            Open admin console
-          </button>
-        </div>
-
-        <nav className="primary-nav" aria-label="Primary navigation">
+        <nav className="rail-nav">
           {primaryNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 isActive || location.pathname.startsWith(item.to)
-                  ? "nav-card active"
-                  : "nav-card"
+                  ? "rail-nav-item active"
+                  : "rail-nav-item"
               }
             >
               <strong>{item.label}</strong>
@@ -89,53 +81,90 @@ export function WorkspaceShell({ children }) {
           ))}
         </nav>
 
-        <section className="sidebar-section">
-          <div className="section-title">
-            <span>Recent conversations</span>
-            <small>{conversations.length}</small>
+        <section className="rail-card launch-card">
+          <div className="card-title-row">
+            <span>快速开始</span>
+            <button type="button" className="text-link" onClick={handleCreateConversation}>
+              新建
+            </button>
+          </div>
+          <button type="button" className="launch-button" onClick={handleCreateConversation}>
+            <span className="launch-icon">+</span>
+            <div>
+              <strong>新建对话</strong>
+              <small>从空白开始一轮新的知识问答</small>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="panel-shortcut"
+            onClick={() => navigate("/admin/knowledge")}
+          >
+            进入知识库后台
+          </button>
+        </section>
+
+        <label className="search-card">
+          <span>搜索会话</span>
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="搜索标题或消息内容"
+          />
+        </label>
+
+        <section className="conversation-pane">
+          <div className="section-head">
+            <span>最近会话</span>
+            <small>{filteredConversations.length}</small>
           </div>
           <div className="conversation-list">
-            {conversations.length ? (
-              conversations.map((conversation) => (
+            {filteredConversations.length ? (
+              filteredConversations.map((conversation) => (
                 <article
                   key={conversation.id}
                   className={
                     location.pathname === `/chat/${conversation.id}`
-                      ? "conversation-row active"
-                      : "conversation-row"
+                      ? "conversation-item active"
+                      : "conversation-item"
                   }
+                  onClick={() => navigate(`/chat/${conversation.id}`)}
                 >
-                  <button
-                    type="button"
-                    className="conversation-select"
-                    onClick={() => navigate(`/chat/${conversation.id}`)}
-                  >
-                    <strong>{conversation.title || "New conversation"}</strong>
-                    <span>{truncate(getConversationPreview(conversation), 52)}</span>
+                  <div className="conversation-copy">
+                    <strong>{conversation.title || "新对话"}</strong>
+                    <p>{truncate(getConversationPreview(conversation), 56)}</p>
+                  </div>
+                  <div className="conversation-actions">
                     <small>{formatDateTime(conversation.updated_at)}</small>
-                  </button>
-                  <button
-                    type="button"
-                    className="conversation-delete"
-                    onClick={(event) => handleDeleteConversation(event, conversation.id)}
-                    title="Delete conversation"
-                  >
-                    x
-                  </button>
+                    <button
+                      type="button"
+                      className="danger-text"
+                      onClick={(event) => handleDeleteConversation(event, conversation.id)}
+                    >
+                      删除
+                    </button>
+                  </div>
                 </article>
               ))
             ) : (
-              <div className="sidebar-empty">
-                <strong>No conversation history yet</strong>
-                <span>Create the first one from the top card.</span>
-              </div>
+              <div className="table-empty">还没有历史会话，可以先新建一个对话。</div>
             )}
           </div>
         </section>
 
-        <div className="sidebar-footer">
-          <label className="control-block">
-            <span>Current user</span>
+        <div className="rail-footer">
+          <div className="user-card">
+            <div className="user-avatar">
+              {(currentUser?.name || "A").slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <strong>{currentUser?.name || "admin"}</strong>
+              <p>{currentUser?.role === "admin" ? "管理员" : "成员"}</p>
+            </div>
+          </div>
+
+          <label className="identity-switch">
+            <span>当前身份</span>
             <select value={currentUserId} onChange={(event) => setCurrentUserId(event.target.value)}>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
@@ -146,8 +175,8 @@ export function WorkspaceShell({ children }) {
           </label>
 
           {modelCatalog ? (
-            <label className="control-block">
-              <span>Model</span>
+            <label className="identity-switch">
+              <span>当前模型</span>
               <select
                 value={modelCatalog.active_model}
                 onChange={(event) => selectModel(event.target.value).catch(console.error)}
@@ -162,33 +191,23 @@ export function WorkspaceShell({ children }) {
             </label>
           ) : null}
 
-          <div className="profile-card">
-            <div className="profile-avatar">
-              {(currentUser?.name || "A").slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <strong>{currentUser?.name || "admin"}</strong>
-              <p>{currentUser?.role === "admin" ? "Administrator" : "Member"}</p>
-            </div>
-          </div>
-
           {stats ? (
-            <div className="tag-row">
-              <span className="tag-chip">{stats.documents} docs</span>
-              <span className="tag-chip">{stats.conversations} chats</span>
-              <span className="tag-chip">{stats.tasks} tasks</span>
+            <div className="rail-stats">
+              <span>{stats.documents} 文档</span>
+              <span>{stats.conversations} 会话</span>
+              <span>{stats.tasks} 任务</span>
             </div>
           ) : null}
 
           {globalNotice ? (
-            <button type="button" className="notice-banner" onClick={() => setGlobalNotice("")}>
+            <button type="button" className="global-notice" onClick={() => setGlobalNotice("")}>
               {globalNotice}
             </button>
           ) : null}
         </div>
       </aside>
 
-      <section className="shell-main">{children}</section>
+      <div className="workspace-stage">{children}</div>
     </div>
   );
 }
