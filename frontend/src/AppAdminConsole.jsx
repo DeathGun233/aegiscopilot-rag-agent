@@ -465,7 +465,7 @@ export function AppAdminConsole() {
 
       <main className="app-main">
         <header className="main-header">
-          <div>
+          <div className="header-title">
             <span className="eyebrow">
               {navItems.find((item) => item.id === activeSection)?.hint}
             </span>
@@ -476,9 +476,23 @@ export function AppAdminConsole() {
             </h1>
           </div>
 
+          <nav className="workspace-nav" aria-label="工作台导航">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={item.id === activeSection ? "workspace-tab active" : "workspace-tab"}
+                onClick={() => setActiveSection(item.id)}
+              >
+                <strong>{item.label}</strong>
+                <small>{item.hint}</small>
+              </button>
+            ))}
+          </nav>
+
           <div className="header-actions">
             {modelCatalog ? (
-              <label className="model-picker">
+              <label className="model-picker compact">
                 <span>模型</span>
                 <select
                   value={modelCatalog.active_model}
@@ -527,83 +541,95 @@ export function AppAdminConsole() {
 
         {activeSection === "chat" ? (
           <section className="chat-workspace">
-            <div className="hero-panel">
-              <span className="hero-badge">企业级 RAG 问答</span>
-              <h2>把问题变成清晰答案</h2>
-              <p>
-                结合知识检索、引用溯源和流式生成，在一次对话中产出简洁可执行的回答。
-              </p>
-            </div>
-
-            <form className="hero-composer" onSubmit={handleSendMessage}>
-              <textarea
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="输入需要分析的问题，例如：生产发布前需要准备什么？"
-                rows={4}
-              />
-
-              <div className="composer-toolbar">
-                <div className="chip-row">
-                  {starterPrompts.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className="ghost-chip"
-                      onClick={() => setQuery(item)}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-
-                <button type="submit" className="primary-button" disabled={isStreaming}>
-                  {isStreaming ? "生成中..." : "发送"}
-                </button>
+            <section className="hero-panel">
+              <div className="hero-copy">
+                <span className="hero-badge">企业级 RAG 问答</span>
+                <h2>把问题变成清晰答案</h2>
+                <p>
+                  结合知识检索、引用溯源和流式生成，在一次对话里产出简洁可执行的回答。
+                </p>
               </div>
 
-              {streamStatus ? <p className="stream-status">{streamStatus}</p> : null}
-            </form>
+              <form className="hero-composer" onSubmit={handleSendMessage}>
+                <textarea
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="输入需要分析的问题，例如：生产发布前需要准备什么？"
+                  rows={4}
+                />
 
-            <div className="scenario-grid">
-              {scenarioCards.map((item) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  className="scenario-card"
-                  onClick={() => setQuery(item.prompt)}
-                >
-                  <strong>{item.title}</strong>
-                  <p>{item.description}</p>
-                  <small>{item.prompt}</small>
-                </button>
-              ))}
-            </div>
+                <div className="composer-actions">
+                  <div className="chip-row">
+                    {starterPrompts.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        className="ghost-chip"
+                        onClick={() => setQuery(item)}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
 
-            <section className="message-stage">
-              {messages.length ? (
-                messages.map((message) => (
-                  <article
-                    key={message.id || `${message.role}-${message.content}`}
-                    className={`message-row ${message.role}`}
+                  <button type="submit" className="primary-button" disabled={isStreaming}>
+                    {isStreaming ? "生成中..." : "发送"}
+                  </button>
+                </div>
+
+                {streamStatus ? <p className="stream-status">{streamStatus}</p> : null}
+              </form>
+
+              <div className="scenario-grid">
+                {scenarioCards.map((item) => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    className="scenario-card"
+                    onClick={() => setQuery(item.prompt)}
                   >
-                    <div className="message-card">
-                      <span className="message-role">
-                        {message.role === "user" ? "用户" : "助手"}
-                      </span>
-                      <p>{message.content}</p>
-                    </div>
-                    {message.role === "assistant" && citationMap[message.id]?.length ? (
-                      <div className="message-sources">
-                        {citationMap[message.id].map((item) => (
-                          <span key={item.chunk_id} className="source-chip">
-                            {item.display_source}
-                          </span>
-                        ))}
+                    <strong>{item.title}</strong>
+                    <p>{item.description}</p>
+                    <small>{item.prompt}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="message-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">Chat Trace</span>
+                  <h3>会话内容</h3>
+                </div>
+                <span className="badge subtle">Streaming</span>
+              </div>
+
+              {messages.length ? (
+                <div className="message-list">
+                  {messages.map((message) => (
+                    <article
+                      key={message.id || `${message.role}-${message.content}`}
+                      className={`message ${message.role}`}
+                    >
+                      <div className="message-body">
+                        <span className="message-role">
+                          {message.role === "user" ? "用户" : "助手"}
+                        </span>
+                        <p>{message.content}</p>
                       </div>
-                    ) : null}
-                  </article>
-                ))
+                      {message.role === "assistant" && citationMap[message.id]?.length ? (
+                        <div className="message-sources">
+                          {citationMap[message.id].map((item) => (
+                            <span key={item.chunk_id} className="source-chip">
+                              {item.display_source}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
               ) : (
                 <div className="empty-panel">
                   <strong>从一个新问题开始</strong>
@@ -616,87 +642,134 @@ export function AppAdminConsole() {
 
         {activeSection === "knowledge" ? (
           <section className="admin-page">
-            <div className="page-hero">
+            <div className="admin-hero knowledge-hero">
               <div>
                 <span className="eyebrow">Knowledge Admin</span>
                 <h2>知识库管理后台</h2>
                 <p>统一管理文档录入、索引状态、用户身份和知识库清理动作。</p>
               </div>
 
-              <label className="primary-button upload-trigger">
-                上传文档
-                <input
-                  type="file"
-                  accept=".txt,.md,.markdown,.pdf,.docx"
-                  onChange={handleUploadDocument}
-                  hidden
-                  disabled={!isAdmin}
-                />
-              </label>
+              <div className="hero-stack">
+                <div className="hero-note">
+                  <strong>已启用录入</strong>
+                  <span>支持 TXT、MD、PDF、DOCX 上传并自动解析。</span>
+                </div>
+                <label className="primary-button upload-trigger">
+                  上传文档
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,.pdf,.docx"
+                    onChange={handleUploadDocument}
+                    hidden
+                    disabled={!isAdmin}
+                  />
+                </label>
+              </div>
             </div>
 
             {adminNotice ? <p className="upload-status">{adminNotice}</p> : null}
 
-            <div className="evaluation-panels">
-              {users.map((user) => (
-                <article key={user.id} className="metric-card">
-                  <span>用户</span>
-                  <strong>{user.name}</strong>
-                  <small>{user.role}</small>
-                </article>
-              ))}
-            </div>
+            <div className="admin-grid">
+              <section className="panel knowledge-panel">
+                <label className="search-panel">
+                  <span>搜索知识库</span>
+                  <input
+                    value={knowledgeFilter}
+                    onChange={(event) => setKnowledgeFilter(event.target.value)}
+                    placeholder="搜索标题、部门或来源..."
+                  />
+                </label>
 
-            <label className="search-panel">
-              <span>搜索知识库</span>
-              <input
-                value={knowledgeFilter}
-                onChange={(event) => setKnowledgeFilter(event.target.value)}
-                placeholder="搜索标题、部门或来源..."
-              />
-            </label>
-
-            <div className="admin-table-head">
-              <span>文档</span>
-              <span>部门</span>
-              <span>索引状态</span>
-              <span>来源</span>
-              <span>操作</span>
-            </div>
-
-            <div className="admin-list">
-              {filteredDocuments.map((document) => (
-                <article key={document.id} className="admin-row">
-                  <div>
-                    <strong>{document.title}</strong>
-                    <small>{formatTime(document.indexed_at || document.created_at)}</small>
+                <div className="admin-table-wrap">
+                  <div className="admin-table-head">
+                    <span>文档</span>
+                    <span>部门</span>
+                    <span>索引状态</span>
+                    <span>来源</span>
+                    <span>操作</span>
                   </div>
-                  <span className="tag-chip">{document.department}</span>
-                  <span className={document.indexed ? "status-chip online" : "status-chip idle"}>
-                    {document.indexed ? document.indexed_label : "未索引"}
-                  </span>
-                  <span className="muted-text">
-                    {document.source_type}
-                    <br />
-                    {document.chunk_count ?? 0} chunks
-                  </span>
-                  <button
-                    type="button"
-                    className="danger-button"
-                    disabled={!isAdmin}
-                    onClick={() => handleDeleteDocument(document.id).catch(console.error)}
+
+                  <div className="admin-list">
+                    {filteredDocuments.length ? (
+                      filteredDocuments.map((document) => (
+                        <article key={document.id} className="admin-row">
+                          <div className="document-main">
+                            <strong>{document.title}</strong>
+                            <small>{formatTime(document.indexed_at || document.created_at)}</small>
+                          </div>
+                          <span className="tag-chip">{document.department}</span>
+                          <span className={document.indexed ? "status-chip online" : "status-chip idle"}>
+                            {document.indexed ? document.indexed_label : "未索引"}
+                          </span>
+                          <span className="muted-text">
+                            {document.source_type}
+                            <br />
+                            {document.chunk_count ?? 0} chunks
+                          </span>
+                          <button
+                            type="button"
+                            className="danger-button"
+                            disabled={!isAdmin}
+                            onClick={() => handleDeleteDocument(document.id).catch(console.error)}
+                          >
+                            删除
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="table-empty">
+                        <strong>没有匹配的文档</strong>
+                        <span>尝试换一个关键词，或者先上传新的知识库文件。</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <aside className="panel user-panel-card">
+                <div className="user-row large">
+                  <div className="user-avatar">
+                    {(currentUser?.name || "A").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{currentUser?.name || "admin"}</strong>
+                    <p>{currentUser?.role || "admin"} · demo account</p>
+                  </div>
+                </div>
+
+                <label className="model-picker">
+                  <span>当前身份</span>
+                  <select
+                    value={currentUserId}
+                    onChange={(event) => setCurrentUserId(event.target.value)}
                   >
-                    删除
-                  </button>
-                </article>
-              ))}
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="section-list">
+                  {users.map((user) => (
+                    <article key={user.id} className="section-card">
+                      <div>
+                        <strong>{user.name}</strong>
+                        <p>可用于切换当前操作身份</p>
+                      </div>
+                      <span>{user.role}</span>
+                    </article>
+                  ))}
+                </div>
+              </aside>
             </div>
           </section>
         ) : null}
 
         {activeSection === "evaluation" ? (
           <section className="admin-page">
-            <div className="page-hero">
+            <div className="admin-hero">
               <div>
                 <span className="eyebrow">Evaluation</span>
                 <h2>效果评估中心</h2>
@@ -709,7 +782,7 @@ export function AppAdminConsole() {
             </div>
 
             {evaluation ? (
-              <div className="evaluation-panels">
+              <div className="metrics-grid">
                 <article className="metric-card">
                   <span>测试样例</span>
                   <strong>{evaluation.cases}</strong>
