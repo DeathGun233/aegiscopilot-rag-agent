@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { AppNext } from "./AppNext";
-import "./styles-next.css";
+import { AppWorkbench } from "./AppWorkbench";
+import "./styles-workbench.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AppNext />
+    <AppWorkbench />
   </React.StrictMode>,
 );
