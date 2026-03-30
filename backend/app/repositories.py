@@ -113,6 +113,12 @@ class DocumentRepository:
     def list_chunks(self) -> list[Chunk]:
         return list(self._chunks.values())
 
+    def list_chunks_for_document(self, document_id: str) -> list[Chunk]:
+        return [chunk for chunk in self._chunks.values() if chunk.document_id == document_id]
+
+    def count_chunks_for_document(self, document_id: str) -> int:
+        return sum(1 for chunk in self._chunks.values() if chunk.document_id == document_id)
+
     def _persist_documents(self) -> None:
         if self.documents_store:
             self.documents_store.save([item.model_dump(mode="json") for item in self._documents.values()])

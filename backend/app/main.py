@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api_schemas import (
@@ -11,7 +11,9 @@ from .api_schemas import (
     ConversationCreateRequest,
     ConversationListResponse,
     DocumentCreateRequest,
+    DocumentDetailResponse,
     DocumentListResponse,
+    DocumentSummary,
     EvaluationResponse,
     IndexResponse,
     ModelCatalogResponse,
@@ -67,6 +69,85 @@ def _require_admin(user: User) -> None:
         raise HTTPException(status_code=403, detail="admin access required")
 
 
+def _friendly_source_type(source_type: str) -> str:
+    normalized = source_type.strip().lower()
+    return {
+        "upload": "上传文件",
+        "seed": "示例文档",
+        "text": "手工录入",
+        "pdf": "PDF",
+        "docx": "Word",
+        "markdown": "Markdown",
+    }.get(normalized, source_type.replace("_", " ").title())
+
+
+def _build_document_summary(document, chunk_count: int) -> DocumentSummary:
+    indexed = bool(document.indexed_at)
+    preview = normalize_text(document.content)[:160]
+    return DocumentSummary(
+        **document.model_dump(mode="json"),
+        chunk_count=chunk_count,
+        indexed=indexed,
+        index_state="indexed" if indexed else "pending",
+        index_state_label="已索引" if indexed else "未索引",
+        indexed_label=f"已索引 · {chunk_count} 片段" if indexed else "未索引",
+        source_label=f"{_friendly_source_type(document.source_type)} · {document.department}",
+        tag_count=len(document.tags),
+        content_preview=preview,
+    )
+
+
+def _document_matches(
+    summary: DocumentSummary,
+    *,
+    query: str | None,
+    department: str | None,
+    source_type: str | None,
+    indexed: bool | None,
+    tag: str | None,
+) -> bool:
+    if department and summary.department.lower() != department.strip().lower():
+        return False
+    if source_type and summary.source_type.lower() != source_type.strip().lower():
+        return False
+    if indexed is not None and summary.indexed != indexed:
+        return False
+    if tag:
+        needle = tag.strip().lower()
+        if not any(needle in item.lower() for item in summary.tags):
+            return False
+    if query:
+        needle = normalize_text(query).lower()
+        haystack = " ".join(
+            [
+                summary.title,
+                summary.content,
+                summary.department,
+                summary.source_type,
+                summary.version,
+                " ".join(summary.tags),
+            ]
+        ).lower()
+        if needle not in haystack:
+            return False
+    return True
+
+
+def _sort_documents(documents: list[DocumentSummary], sort_by: str) -> list[DocumentSummary]:
+    key = sort_by.strip().lower()
+    if key == "title_asc":
+        return sorted(documents, key=lambda item: item.title.lower())
+    if key == "title_desc":
+        return sorted(documents, key=lambda item: item.title.lower(), reverse=True)
+    if key == "created_asc":
+        return sorted(documents, key=lambda item: item.created_at)
+    return sorted(
+        documents,
+        key=lambda item: (item.indexed_at or item.created_at, item.title.lower()),
+        reverse=True,
+    )
+
+
 @app.get("/system/stats", response_model=SystemStatsResponse)
 def get_system_stats() -> SystemStatsResponse:
     container = get_container()
@@ -76,12 +157,13 @@ def get_system_stats() -> SystemStatsResponse:
 @app.get("/users", response_model=UserListResponse)
 def list_users() -> UserListResponse:
     container = get_container()
-    return UserListResponse(users=container.user_service.list_users())
+    return UserListResponse(users=container.user_service.list_user_summaries())
 
 
 @app.get("/users/me", response_model=CurrentUserResponse)
 def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
-    return CurrentUserResponse(user=current_user)
+    container = get_container()
+    return CurrentUserResponse(user=container.user_service.summarize_user(current_user))
 
 
 @app.get("/models", response_model=ModelCatalogResponse)
@@ -136,24 +218,64 @@ def delete_conversation(conversation_id: str) -> dict:
 
 
 @app.get("/documents", response_model=DocumentListResponse)
-def list_documents() -> DocumentListResponse:
+def list_documents(
+    q: str | None = None,
+    department: str | None = None,
+    source_type: str | None = None,
+    indexed: bool | None = None,
+    tag: str | None = None,
+    limit: int | None = None,
+    sort_by: str = "updated_desc",
+) -> DocumentListResponse:
     container = get_container()
-    chunks = container.documents.list_chunks()
     counts: dict[str, int] = {}
-    for chunk in chunks:
+    for chunk in container.documents.list_chunks():
         counts[chunk.document_id] = counts.get(chunk.document_id, 0) + 1
-    documents = []
-    for document in container.document_service.list_documents():
-        chunk_count = counts.get(document.id, 0)
-        documents.append(
-            {
-                **document.model_dump(mode="json"),
-                "chunk_count": chunk_count,
-                "indexed": bool(document.indexed_at),
-                "indexed_label": f"{chunk_count} chunks indexed" if chunk_count else "Not indexed yet",
-            }
+
+    documents = [
+        _build_document_summary(document, counts.get(document.id, 0))
+        for document in container.document_service.list_documents()
+    ]
+    documents = [
+        document
+        for document in documents
+        if _document_matches(
+            document,
+            query=q,
+            department=department,
+            source_type=source_type,
+            indexed=indexed,
+            tag=tag,
         )
+    ]
+    documents = _sort_documents(documents, sort_by)
+    if limit is not None and limit >= 0:
+        documents = documents[:limit]
     return DocumentListResponse(documents=documents)
+
+
+@app.get("/documents/{document_id}", response_model=DocumentDetailResponse)
+def get_document(document_id: str) -> DocumentDetailResponse:
+    container = get_container()
+    document = container.document_service.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    chunk_count = container.documents.count_chunks_for_document(document_id)
+    summary = _build_document_summary(document, chunk_count)
+    chunks = [
+        {
+            "id": chunk.id,
+            "document_id": chunk.document_id,
+            "document_title": chunk.document_title,
+            "chunk_index": chunk.chunk_index,
+            "text_preview": normalize_text(chunk.text)[:180],
+            "token_count": len(chunk.tokens),
+            "metadata": chunk.metadata,
+        }
+        for chunk in container.documents.list_chunks_for_document(document_id)
+    ]
+    return DocumentDetailResponse(document=summary, chunks=chunks)
 
 
 @app.post("/documents", response_model=dict)

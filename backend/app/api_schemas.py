@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from .models import (
     AgentTask,
     Conversation,
     Document,
+    DocumentIndexState,
     EvaluationRun,
     Message,
     ModelCatalog,
@@ -18,7 +21,27 @@ from .models import (
 class DocumentSummary(Document):
     chunk_count: int = 0
     indexed: bool = False
-    indexed_label: str = "Not Indexed"
+    index_state: DocumentIndexState = DocumentIndexState.pending
+    index_state_label: str = "未索引"
+    indexed_label: str = "未索引"
+    source_label: str = ""
+    tag_count: int = 0
+    content_preview: str = ""
+
+
+class ChunkSummary(BaseModel):
+    id: str
+    document_id: str
+    document_title: str
+    chunk_index: int
+    text_preview: str
+    token_count: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DocumentDetail(BaseModel):
+    document: DocumentSummary
+    chunks: list[ChunkSummary] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
@@ -76,7 +99,10 @@ class ModelCatalogResponse(BaseModel):
 
 
 class UserSummary(User):
-    pass
+    role_label: str = ""
+    can_manage_knowledge: bool = False
+    can_manage_models: bool = False
+    permissions: list[str] = Field(default_factory=list)
 
 
 class UserListResponse(BaseModel):
@@ -85,6 +111,11 @@ class UserListResponse(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     user: UserSummary
+
+
+class DocumentDetailResponse(BaseModel):
+    document: DocumentSummary
+    chunks: list[ChunkSummary] = Field(default_factory=list)
 
 
 class EvaluationResponse(BaseModel):

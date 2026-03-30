@@ -38,6 +38,11 @@ class UserRole(str, Enum):
     member = "member"
 
 
+class DocumentIndexState(str, Enum):
+    pending = "pending"
+    indexed = "indexed"
+
+
 class Message(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     role: MessageRole
