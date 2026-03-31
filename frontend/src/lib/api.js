@@ -33,7 +33,14 @@ async function parseJson(response) {
       throw new Error(payload.detail || raw || `Request failed: ${response.status}`);
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(raw || `Request failed: ${response.status}`);
+        const text = (raw || "").trim();
+        if (response.status === 404 && text === "Not Found") {
+          if (response.url.endsWith("/auth/login")) {
+            throw new Error("登录接口不存在，请重启后端服务后再试");
+          }
+          throw new Error("未找到对应的接口或资源");
+        }
+        throw new Error(raw || `请求失败：${response.status}`);
       }
       throw error;
     }
@@ -87,7 +94,7 @@ export async function streamChat({ query, conversationId }, { onConversation, on
 
   if (!response.ok || !response.body) {
     const detail = await response.text();
-    throw new Error(detail || `stream request failed: ${response.status}`);
+    throw new Error(detail || `流式请求失败：${response.status}`);
   }
 
   const reader = response.body.getReader();

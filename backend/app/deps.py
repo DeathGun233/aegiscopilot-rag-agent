@@ -70,12 +70,12 @@ def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> User:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     token = authorization.split(" ", 1)[1].strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     container = get_container()
     try:
         return container.auth_service.get_user_by_token(token)
     except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid session") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录态已失效，请重新登录") from exc

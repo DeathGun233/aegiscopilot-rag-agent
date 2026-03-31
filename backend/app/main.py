@@ -67,24 +67,24 @@ def health() -> dict[str, str]:
 
 def _require_admin(user: User) -> None:
     if user.role != UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
 
 
 def _extract_bearer_token(authorization: str | None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     token = authorization.split(" ", 1)[1].strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     return token
 
 
 def _friendly_source_type(source_type: str) -> str:
     normalized = source_type.strip().lower()
     return {
-        "upload": "Uploaded file",
-        "seed": "Sample document",
-        "text": "Manual input",
+        "upload": "上传文件",
+        "seed": "示例文档",
+        "text": "手动录入",
         "pdf": "PDF",
         "docx": "Word",
         "markdown": "Markdown",
@@ -99,8 +99,8 @@ def _build_document_summary(document, chunk_count: int) -> DocumentSummary:
         chunk_count=chunk_count,
         indexed=indexed,
         index_state="indexed" if indexed else "pending",
-        index_state_label="Indexed" if indexed else "Pending",
-        indexed_label=f"Indexed with {chunk_count} chunks" if indexed else "Not indexed",
+        index_state_label="已索引" if indexed else "待索引",
+        indexed_label=f"已索引，共 {chunk_count} 个片段" if indexed else "未索引",
         source_label=f"{_friendly_source_type(document.source_type)} / {document.department}",
         tag_count=len(document.tags),
         content_preview=preview,

@@ -18,7 +18,7 @@ class UserService:
             permissions.extend(["knowledge:write", "model:write", "conversation:delete"])
         return {
             **user.model_dump(mode="json"),
-            "role_label": "Administrator" if is_admin else "Member",
+            "role_label": "管理员" if is_admin else "成员",
             "can_manage_knowledge": is_admin,
             "can_manage_models": is_admin,
             "permissions": permissions,

@@ -31,7 +31,7 @@ function RequireAuth() {
   const location = useLocation();
 
   if (bootstrapping) {
-    return <FullScreenState title="Loading workspace" message="Checking your session..." />;
+    return <FullScreenState title="正在加载工作台" message="正在检查登录状态..." />;
   }
 
   if (!isAuthenticated) {
@@ -46,7 +46,7 @@ function RequireAdmin() {
   const location = useLocation();
 
   if (bootstrapping) {
-    return <FullScreenState title="Loading workspace" message="Checking your permissions..." />;
+    return <FullScreenState title="正在加载工作台" message="正在检查访问权限..." />;
   }
 
   if (!isAuthenticated) {
@@ -64,7 +64,7 @@ function GuestOnly() {
   const { bootstrapping, isAuthenticated } = useAppContext();
 
   if (bootstrapping) {
-    return <FullScreenState title="Loading workspace" message="Preparing the sign-in page..." />;
+    return <FullScreenState title="正在加载工作台" message="正在准备登录页..." />;
   }
 
   if (isAuthenticated) {

@@ -53,7 +53,7 @@ class Message(BaseModel):
 class Conversation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     owner_id: str = "admin"
-    title: str = "New conversation"
+    title: str = "新对话"
     messages: list[Message] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

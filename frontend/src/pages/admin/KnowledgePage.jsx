@@ -5,9 +5,9 @@ import { truncate } from "../../lib/format";
 
 function sourceLabel(document) {
   const mapping = {
-    upload: "Uploaded file",
-    seed: "Sample document",
-    text: "Manual input",
+    upload: "上传文件",
+    seed: "示例文档",
+    text: "手动录入",
     pdf: "PDF",
     docx: "Word",
     markdown: "Markdown",
@@ -40,12 +40,12 @@ export function KnowledgePage() {
       return;
     }
     setBusy(true);
-    setGlobalNotice(`Importing ${file.name}...`);
+    setGlobalNotice(`正在导入 ${file.name}...`);
     try {
       const result = await uploadDocumentFile(file);
-      setGlobalNotice(`Imported ${result.document.title}. Added ${result.chunks_created} chunks.`);
+      setGlobalNotice(`已导入 ${result.document.title}，新增 ${result.chunks_created} 个片段。`);
     } catch (error) {
-      setGlobalNotice(error.message || "Document upload failed.");
+      setGlobalNotice(error.message || "文档上传失败");
     } finally {
       setBusy(false);
       event.target.value = "";
@@ -55,9 +55,9 @@ export function KnowledgePage() {
   async function handleDelete(documentId) {
     try {
       await deleteDocument(documentId);
-      setGlobalNotice("Document deleted from the knowledge base.");
+      setGlobalNotice("文档已从知识库删除。");
     } catch (error) {
-      setGlobalNotice(error.message || "Document deletion failed.");
+      setGlobalNotice(error.message || "文档删除失败");
     }
   }
 
@@ -65,14 +65,14 @@ export function KnowledgePage() {
     <div className="admin-content">
       <section className="dashboard-hero knowledge-hero">
         <div>
-          <span className="hero-pill">Knowledge Base</span>
-          <h2>Knowledge management</h2>
-          <p>Upload documents, inspect indexing output, and open document detail pages for chunk-level review.</p>
+          <span className="hero-pill">知识库</span>
+          <h2>知识管理</h2>
+          <p>支持上传文档、查看索引结果，并进入详情页检查 chunk 拆分情况。</p>
         </div>
 
         <div className="hero-actions">
           <label className="primary-action upload-button">
-            Upload document
+            上传文档
             <input type="file" accept=".txt,.md,.markdown,.pdf,.docx" onChange={handleUpload} hidden disabled={busy} />
           </label>
         </div>
@@ -83,17 +83,17 @@ export function KnowledgePage() {
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="Search by title, department, source, or tag"
+            placeholder="按标题、部门、来源或标签搜索"
           />
         </div>
 
         <div className="data-table">
           <div className="data-table-head data-table-head--knowledge">
-            <span>Document</span>
-            <span>Department</span>
-            <span>Source</span>
-            <span>Status</span>
-            <span>Actions</span>
+            <span>文档</span>
+            <span>部门</span>
+            <span>来源</span>
+            <span>状态</span>
+            <span>操作</span>
           </div>
 
           {visibleDocuments.length ? (
@@ -106,20 +106,20 @@ export function KnowledgePage() {
                 <span>{document.department}</span>
                 <span>{sourceLabel(document)}</span>
                 <span className={document.indexed ? "state-badge indexed" : "state-badge pending"}>
-                  {document.indexed ? `Indexed / ${document.chunk_count || 0} chunks` : "Pending"}
+                  {document.indexed ? `已索引 / ${document.chunk_count || 0} 个片段` : "待索引"}
                 </span>
                 <div className="inline-actions">
                   <button type="button" className="text-link" onClick={() => navigate(`/admin/knowledge/${document.id}`)}>
-                    Detail
+                    详情
                   </button>
                   <button type="button" className="danger-text" onClick={() => handleDelete(document.id)}>
-                    Delete
+                    删除
                   </button>
                 </div>
               </article>
             ))
           ) : (
-            <div className="table-empty">No documents matched the current filter.</div>
+            <div className="table-empty">当前筛选条件下没有匹配的文档。</div>
           )}
         </div>
       </section>

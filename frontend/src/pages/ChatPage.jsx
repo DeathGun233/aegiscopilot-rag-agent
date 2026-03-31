@@ -6,27 +6,27 @@ import { useAppContext } from "../context/AppContext";
 import { fetchJson, streamChat } from "../lib/api";
 
 const starterPrompts = [
-  "What is the employee leave process?",
-  "What should be checked before a production release?",
-  "Summarize the travel reimbursement process.",
-  "What should a cross-border ecommerce company watch for in personal data protection?",
+  "员工请假流程是什么？",
+  "生产发布前需要检查什么？",
+  "请总结差旅报销流程。",
+  "跨境电商公司在个人信息保护方面要注意什么？",
 ];
 
 const scenarioCards = [
   {
-    title: "Policy QA",
-    description: "Ask grounded questions about internal policy, process, and standards.",
-    prompt: "What is the employee leave process?",
+    title: "制度问答",
+    description: "围绕企业制度、流程和规范发起基于知识库的提问。",
+    prompt: "员工请假流程是什么？",
   },
   {
-    title: "Process summary",
-    description: "Turn scattered evidence into a more structured operational summary.",
-    prompt: "Summarize the travel reimbursement process.",
+    title: "流程总结",
+    description: "把分散证据整理成更结构化的操作结论。",
+    prompt: "请总结差旅报销流程。",
   },
   {
-    title: "Release checklist",
-    description: "Convert release questions into a practical pre-launch checklist.",
-    prompt: "What should be checked before a production release?",
+    title: "发布检查",
+    description: "把发布类问题转成上线前可执行的检查清单。",
+    prompt: "生产发布前需要检查什么？",
   },
 ];
 
@@ -82,7 +82,7 @@ export function ChatPage() {
       { id: assistantId, role: "assistant", content: "" },
     ]);
     setIsStreaming(true);
-    setStreamStatus("Connecting to the model...");
+    setStreamStatus("正在连接模型...");
     setQuery("");
     setCitationMap((current) => ({ ...current, [assistantId]: [] }));
 
@@ -125,10 +125,10 @@ export function ChatPage() {
     } catch (error) {
       setMessages((current) =>
         current.map((message) =>
-          message.id === assistantId ? { ...message, content: "The model request failed. Please try again." } : message,
+            message.id === assistantId ? { ...message, content: "模型请求失败，请稍后重试。" } : message,
         ),
       );
-      setStreamStatus(error.message || "The model request failed.");
+      setStreamStatus(error.message || "模型请求失败");
     } finally {
       setIsStreaming(false);
     }
@@ -139,15 +139,15 @@ export function ChatPage() {
       <header className="page-header">
         <div>
           <span className="page-kicker">AegisCopilot / Chat</span>
-          <h1>{currentConversation?.title || "New conversation"}</h1>
+          <h1>{currentConversation?.title || "新对话"}</h1>
         </div>
       </header>
 
       <section className="chat-hero">
         <div className="hero-copy">
-          <span className="hero-pill">RAG Assistant</span>
-          <h2>Turn questions into grounded answers</h2>
-          <p>Ask structured questions, search internal evidence, and stream concise responses for real business use.</p>
+          <span className="hero-pill">RAG 智能问答</span>
+          <h2>把问题变成有依据的答案</h2>
+          <p>通过结构化提问、知识检索与流式生成，服务真实业务场景下的企业知识问答。</p>
         </div>
 
         <ChatComposer
@@ -174,9 +174,9 @@ export function ChatPage() {
         <div className="panel-head">
           <div>
             <span className="panel-kicker">Conversation</span>
-            <h3>Thread</h3>
+            <h3>会话内容</h3>
           </div>
-          <span className={isStreaming ? "status-dot live" : "status-dot"}>Streaming</span>
+          <span className={isStreaming ? "status-dot live" : "status-dot"}>流式输出</span>
         </div>
         <MessageList messages={messages} citationMap={citationMap} />
       </section>

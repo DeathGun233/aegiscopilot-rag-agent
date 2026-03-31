@@ -22,9 +22,9 @@ export function WorkspaceShell({ children }) {
   const [keyword, setKeyword] = useState("");
 
   const primaryNav = useMemo(() => {
-    const items = [{ to: "/chat", label: "Chat", hint: "Ask grounded questions and run workflows" }];
+    const items = [{ to: "/chat", label: "聊天", hint: "基于知识库提问并发起问答流程" }];
     if (isAdmin) {
-      items.push({ to: "/admin/overview", label: "Admin", hint: "Manage knowledge, users, and evaluation" });
+      items.push({ to: "/admin/overview", label: "管理后台", hint: "管理知识库、用户与评估任务" });
     }
     return items;
   }, [isAdmin]);
@@ -43,7 +43,7 @@ export function WorkspaceShell({ children }) {
   }, [conversations, keyword]);
 
   async function handleCreateConversation() {
-    const conversation = await createConversation("New conversation");
+    const conversation = await createConversation("新对话");
     navigate(`/chat/${conversation.id}`);
   }
 
@@ -67,7 +67,7 @@ export function WorkspaceShell({ children }) {
           <div className="brand-badge">AI</div>
           <div>
             <strong>AegisCopilot</strong>
-            <p>Enterprise knowledge assistant</p>
+            <p>企业知识库智能助手</p>
           </div>
         </div>
 
@@ -88,37 +88,37 @@ export function WorkspaceShell({ children }) {
 
         <section className="rail-card launch-card">
           <div className="card-title-row">
-            <span>Quick start</span>
+            <span>快捷开始</span>
             <button type="button" className="text-link" onClick={handleCreateConversation}>
-              New
+              新建
             </button>
           </div>
           <button type="button" className="launch-button" onClick={handleCreateConversation}>
             <span className="launch-icon">+</span>
             <div>
-              <strong>Start a conversation</strong>
-              <small>Create a clean thread for a new business or knowledge request.</small>
+              <strong>新建对话</strong>
+              <small>为新的业务问题或知识查询开启一条独立会话。</small>
             </div>
           </button>
           {isAdmin ? (
             <button type="button" className="panel-shortcut" onClick={() => navigate("/admin/knowledge")}>
-              Open the admin knowledge console
+              进入知识库后台
             </button>
           ) : null}
         </section>
 
         <label className="search-card">
-          <span>Search conversations</span>
+          <span>搜索会话</span>
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="Search titles or message content"
+            placeholder="搜索标题或消息内容"
           />
         </label>
 
         <section className="conversation-pane">
           <div className="section-head">
-            <span>Recent conversations</span>
+            <span>最近会话</span>
             <small>{filteredConversations.length}</small>
           </div>
           <div className="conversation-list">
@@ -134,7 +134,7 @@ export function WorkspaceShell({ children }) {
                   onClick={() => navigate(`/chat/${conversation.id}`)}
                 >
                   <div className="conversation-copy">
-                    <strong>{conversation.title || "New conversation"}</strong>
+                    <strong>{conversation.title || "新对话"}</strong>
                     <p>{truncate(getConversationPreview(conversation), 56)}</p>
                   </div>
                   <div className="conversation-actions">
@@ -144,13 +144,13 @@ export function WorkspaceShell({ children }) {
                       className="danger-text"
                       onClick={(event) => handleDeleteConversation(event, conversation.id)}
                     >
-                      Delete
+                      删除
                     </button>
                   </div>
                 </article>
               ))
             ) : (
-              <div className="table-empty">No conversations yet. Start one from the launcher above.</div>
+              <div className="table-empty">还没有历史会话，可以先从上方新建一个。</div>
             )}
           </div>
         </section>
@@ -159,14 +159,14 @@ export function WorkspaceShell({ children }) {
           <div className="user-card">
             <div className="user-avatar">{(currentUser?.name || "A").slice(0, 1).toUpperCase()}</div>
             <div>
-              <strong>{currentUser?.name || "Unknown user"}</strong>
-              <p>{isAdmin ? "Administrator" : "Member"}</p>
+              <strong>{currentUser?.name || "未知用户"}</strong>
+              <p>{isAdmin ? "管理员" : "成员"}</p>
             </div>
           </div>
 
           {modelCatalog ? (
             <label className="identity-switch">
-              <span>Active model</span>
+              <span>当前模型</span>
               <select
                 value={modelCatalog.active_model}
                 onChange={(event) => selectModel(event.target.value).catch(console.error)}
@@ -190,7 +190,7 @@ export function WorkspaceShell({ children }) {
           ) : null}
 
           <button type="button" className="secondary-action" onClick={handleLogout}>
-            Sign out
+            退出登录
           </button>
 
           {globalNotice ? (

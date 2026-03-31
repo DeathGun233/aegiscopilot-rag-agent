@@ -2,10 +2,10 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 const adminTabs = [
-  { to: "/admin/overview", label: "Overview" },
-  { to: "/admin/knowledge", label: "Knowledge" },
-  { to: "/admin/evaluation", label: "Evaluation" },
-  { to: "/admin/users", label: "Users" },
+  { to: "/admin/overview", label: "概览" },
+  { to: "/admin/knowledge", label: "知识库" },
+  { to: "/admin/evaluation", label: "评估" },
+  { to: "/admin/users", label: "用户" },
 ];
 
 export function AdminLayout() {
@@ -16,13 +16,13 @@ export function AdminLayout() {
       <header className="page-header admin-header">
         <div>
           <span className="page-kicker">AegisCopilot / Admin</span>
-          <h1>Admin console</h1>
+          <h1>管理后台</h1>
         </div>
 
         {modelCatalog ? (
           <div className="header-toolbar">
             <label className="toolbar-field">
-              <span>Active model</span>
+              <span>当前模型</span>
               <select
                 value={modelCatalog.active_model}
                 onChange={(event) => selectModel(event.target.value).catch(console.error)}
@@ -38,7 +38,7 @@ export function AdminLayout() {
         ) : null}
       </header>
 
-      <nav className="admin-tabs" aria-label="Admin navigation">
+      <nav className="admin-tabs" aria-label="后台导航">
         {adminTabs.map((item) => (
           <NavLink
             key={item.to}

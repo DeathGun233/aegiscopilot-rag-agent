@@ -133,7 +133,7 @@ export function AppProvider({ children }) {
             setConversations,
             setEvaluationRun,
           });
-          setAppError(error.message || "Failed to load application data.");
+          setAppError(error.message || "应用数据加载失败");
         }
       } finally {
         if (!cancelled) {
@@ -184,7 +184,7 @@ export function AppProvider({ children }) {
     }
   }
 
-  async function createConversation(title = "New conversation") {
+  async function createConversation(title = "新对话") {
     const data = await fetchJson("/conversations", {
       method: "POST",
       body: { title },

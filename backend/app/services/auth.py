@@ -15,7 +15,7 @@ class AuthService:
     def login(self, username: str, password: str) -> tuple[User, AuthSession]:
         user = self._find_user(username)
         if user is None or not self._password_matches(user.id, password):
-            raise ValueError("invalid username or password")
+            raise ValueError("用户名或密码错误")
         session = AuthSession(user_id=user.id)
         return user, self.sessions.save(session)
 

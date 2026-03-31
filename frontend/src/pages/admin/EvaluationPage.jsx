@@ -23,7 +23,7 @@ export function EvaluationPage() {
     <div className="admin-content">
       <section className="dashboard-hero">
         <div>
-          <span className="hero-pill">Evaluation</span>
+          <span className="hero-pill">离线评估</span>
           <h2>离线评估中心</h2>
           <p>使用内置测试集观察当前回答率、引用命中率和知识覆盖效果。</p>
         </div>
@@ -61,7 +61,7 @@ export function EvaluationPage() {
           <section className="panel-card">
             <div className="panel-head">
               <div>
-                <span className="panel-kicker">Run Detail</span>
+                <span className="panel-kicker">运行详情</span>
                 <h3>最近一次评估</h3>
               </div>
               <small>{formatDateTime(evaluationRun.created_at)}</small>
@@ -72,9 +72,7 @@ export function EvaluationPage() {
                 <article key={item.case_id} className="evaluation-card">
                   <strong>{item.question}</strong>
                   <p>{item.answer}</p>
-                  <small>
-                    引用文档：{item.citations?.length ? item.citations.join("、") : "无"}
-                  </small>
+                  <small>引用文档：{item.citations?.length ? item.citations.join("、") : "无"}</small>
                 </article>
               ))}
             </div>

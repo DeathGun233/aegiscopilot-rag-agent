@@ -5,9 +5,9 @@ import { formatDateTime, truncate } from "../../lib/format";
 
 function sourceLabel(document) {
   const mapping = {
-    upload: "Uploaded file",
-    seed: "Sample document",
-    text: "Manual input",
+    upload: "上传文件",
+    seed: "示例文档",
+    text: "手动录入",
     pdf: "PDF",
     docx: "Word",
     markdown: "Markdown",
@@ -36,7 +36,7 @@ export function DocumentDetailPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError.message || "Failed to load the document.");
+          setError(loadError.message || "文档加载失败");
         }
       } finally {
         if (!cancelled) {
@@ -54,10 +54,10 @@ export function DocumentDetailPage() {
   async function handleDelete() {
     try {
       await deleteDocument(documentId);
-      setGlobalNotice("Document deleted from the knowledge base.");
+      setGlobalNotice("文档已从知识库删除。");
       navigate("/admin/knowledge", { replace: true });
     } catch (deleteError) {
-      setGlobalNotice(deleteError.message || "Document deletion failed.");
+      setGlobalNotice(deleteError.message || "文档删除失败");
     }
   }
 
@@ -65,22 +65,22 @@ export function DocumentDetailPage() {
     <div className="admin-content">
       <section className="dashboard-hero">
         <div>
-          <span className="hero-pill">Document Detail</span>
-          <h2>{detail?.document?.title || "Loading document"}</h2>
-          <p>Inspect the stored source content and the chunk breakdown that powers retrieval.</p>
+          <span className="hero-pill">文档详情</span>
+          <h2>{detail?.document?.title || "正在加载文档"}</h2>
+          <p>查看原始内容和 chunk 拆分结果，辅助排查检索效果。</p>
         </div>
 
         <div className="hero-actions">
           <Link className="secondary-action" to="/admin/knowledge">
-            Back to list
+            返回列表
           </Link>
           <button type="button" className="danger-outline" onClick={handleDelete} disabled={!detail}>
-            Delete document
+            删除文档
           </button>
         </div>
       </section>
 
-      {loading ? <section className="panel-card table-empty">Loading document detail...</section> : null}
+      {loading ? <section className="panel-card table-empty">正在加载文档详情...</section> : null}
       {error ? <section className="panel-card table-empty">{error}</section> : null}
 
       {detail ? (
@@ -88,40 +88,40 @@ export function DocumentDetailPage() {
           <article className="panel-card">
             <div className="panel-head">
               <div>
-                <span className="panel-kicker">Metadata</span>
-                <h3>Document profile</h3>
+                <span className="panel-kicker">元数据</span>
+                <h3>文档信息</h3>
               </div>
             </div>
 
             <div className="definition-list">
               <div>
-                <span>Department</span>
+                <span>部门</span>
                 <strong>{detail.document.department}</strong>
               </div>
               <div>
-                <span>Source</span>
+                <span>来源</span>
                 <strong>{sourceLabel(detail.document)}</strong>
               </div>
               <div>
-                <span>Status</span>
-                <strong>{detail.document.indexed ? "Indexed" : "Pending"}</strong>
+                <span>状态</span>
+                <strong>{detail.document.indexed ? "已索引" : "待索引"}</strong>
               </div>
               <div>
-                <span>Indexed at</span>
+                <span>索引时间</span>
                 <strong>{detail.document.indexed_at ? formatDateTime(detail.document.indexed_at) : "-"}</strong>
               </div>
               <div>
-                <span>Version</span>
+                <span>版本</span>
                 <strong>{detail.document.version}</strong>
               </div>
               <div>
-                <span>Tags</span>
+                <span>标签</span>
                 <strong>{detail.document.tags?.join(", ") || "-"}</strong>
               </div>
             </div>
 
             <div className="detail-block">
-              <span>Source content preview</span>
+              <span>原始内容预览</span>
               <p>{truncate(detail.document.content || "", 800)}</p>
             </div>
           </article>
@@ -129,8 +129,8 @@ export function DocumentDetailPage() {
           <article className="panel-card">
             <div className="panel-head">
               <div>
-                <span className="panel-kicker">Chunks</span>
-                <h3>Chunk breakdown</h3>
+                <span className="panel-kicker">片段</span>
+                <h3>Chunk 拆分</h3>
               </div>
             </div>
 
@@ -138,13 +138,13 @@ export function DocumentDetailPage() {
               {detail.chunks.length ? (
                 detail.chunks.map((chunk) => (
                   <article key={chunk.id} className="chunk-card">
-                    <strong>Chunk {chunk.chunk_index + 1}</strong>
-                    <small>{chunk.token_count} tokens</small>
+                    <strong>片段 {chunk.chunk_index + 1}</strong>
+                    <small>{chunk.token_count} 个 token</small>
                     <p>{chunk.text_preview}</p>
                   </article>
                 ))
               ) : (
-                <div className="table-empty">This document has not been indexed yet.</div>
+                <div className="table-empty">当前文档尚未建立索引。</div>
               )}
             </div>
           </article>

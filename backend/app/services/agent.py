@@ -56,11 +56,11 @@ class AgentService:
         steps = self._workflow_steps()
 
         self._detect_intent(context)
-        yield {"type": "status", "message": "Classifying intent..."}
+        yield {"type": "status", "message": "正在识别问题意图..."}
         self._retrieve_context(context)
-        yield {"type": "status", "message": "Searching the knowledge base..."}
+        yield {"type": "status", "message": "正在检索知识库..."}
         self._plan_response(context)
-        yield {"type": "status", "message": "Generating the answer..."}
+        yield {"type": "status", "message": "正在生成回答..."}
 
         if context.intent == Intent.chitchat:
             context.answer = self._greeting_answer()
@@ -125,15 +125,15 @@ class AgentService:
     def _detect_intent(self, context: WorkflowContext) -> None:
         raw_query = context.query.lower()
         compact_query = raw_query.replace(" ", "")
-        if any(word in compact_query for word in ["compare", "summary", "summarize", "compare", "compare", "对比", "总结", "整理"]):
+        if any(word in compact_query for word in ["compare", "summary", "summarize", "对比", "总结", "整理"]):
             context.intent = Intent.task
-            context.route_reason = "Detected summarization or comparison language."
+            context.route_reason = "识别到总结或对比类问题。"
         elif any(word in compact_query for word in ["hello", "hi", "你好", "在吗"]):
             context.intent = Intent.chitchat
-            context.route_reason = "Detected a greeting."
+            context.route_reason = "识别到问候语。"
         else:
             context.intent = Intent.knowledge_qa
-            context.route_reason = "Defaulted to grounded knowledge QA."
+            context.route_reason = "默认按知识库问答处理。"
         context.trace.append(
             {
                 "step": WorkflowStep.intent_detect,
@@ -191,8 +191,8 @@ class AgentService:
         context.grounded = score >= settings.min_grounding_score or context.intent == Intent.chitchat
         if not context.grounded and context.intent != Intent.chitchat:
             context.answer = (
-                "I found a small amount of related content, but not enough evidence to give a reliable answer. "
-                "Please narrow the question or add more internal material."
+                "我检索到少量相关内容，但证据还不足以支撑可靠结论。"
+                "建议进一步缩小问题范围，或者补充更多内部资料。"
             )
         context.trace.append(
             {
@@ -223,8 +223,8 @@ class AgentService:
 
     @staticmethod
     def _greeting_answer() -> str:
-        return "Hello, I am AegisCopilot. Ask me about internal policy, process, product docs, or engineering rules."
+        return "你好，我是 AegisCopilot。你可以向我咨询企业制度、业务流程、产品文档或技术规范相关的问题。"
 
     @staticmethod
     def _insufficient_evidence_answer() -> str:
-        return "There is not enough grounded evidence in the knowledge base to answer this question yet."
+        return "当前知识库里还没有足够证据支撑这个问题的回答。"

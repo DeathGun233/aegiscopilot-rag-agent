@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 const demoAccounts = [
-  { username: "admin", password: "admin123", label: "Admin" },
-  { username: "member", password: "member123", label: "Member" },
+  { username: "admin", password: "admin123", label: "管理员" },
+  { username: "member", password: "member123", label: "成员" },
 ];
 
 export function LoginPage() {
@@ -25,7 +25,7 @@ export function LoginPage() {
       await login(form.username, form.password);
       navigate(nextPath, { replace: true });
     } catch (loginError) {
-      setError(loginError.message || "Login failed.");
+      setError(loginError.message || "登录失败");
     } finally {
       setSubmitting(false);
     }
@@ -36,31 +36,30 @@ export function LoginPage() {
       <section className="auth-card">
         <div className="auth-hero">
           <span className="hero-pill">AegisCopilot</span>
-          <h1>Sign in to the workspace</h1>
+          <h1>登录工作台</h1>
           <p>
-            This first migration version replaces the old role switcher with a real session flow and
-            admin-only console access.
+            第一波迁移版本已经把原来的前端角色切换，替换成真实登录态和管理员后台权限控制。
           </p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            <span>Username</span>
+            <span>用户名</span>
             <input
               value={form.username}
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-              placeholder="admin"
+              placeholder="请输入用户名"
               autoComplete="username"
             />
           </label>
 
           <label>
-            <span>Password</span>
+            <span>密码</span>
             <input
               type="password"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              placeholder="Enter password"
+              placeholder="请输入密码"
               autoComplete="current-password"
             />
           </label>
@@ -68,7 +67,7 @@ export function LoginPage() {
           {error || appError ? <div className="auth-error">{error || appError}</div> : null}
 
           <button type="submit" className="primary-action auth-submit" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting ? "登录中..." : "登录"}
           </button>
         </form>
 
