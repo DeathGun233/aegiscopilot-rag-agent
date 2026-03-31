@@ -1,6 +1,6 @@
 ﻿# AegisCopilot
 
-AegisCopilot 是一个面向企业知识库问答的 AIAgent 学习项目。当前版本已经可以作为求职作品和面试演示项目使用，覆盖了知识库上传、RAG 问答、流式回答、模型切换、会话管理、知识库治理、用户角色切换和离线评估。
+AegisCopilot 是一个面向企业知识库问答的 AIAgent 学习项目。当前版本可以作为求职作品和面试演示项目使用，覆盖了知识库上传、RAG 问答、流式回答、模型切换、会话管理、知识库治理、用户角色切换和离线评估。使用Codex辅助生成的项目。
 
 ## 当前已实现功能
 
@@ -96,7 +96,7 @@ http://localhost:5177
 <img width="1920" height="911" alt="image" src="https://github.com/user-attachments/assets/66c5d5cc-957b-4e76-afd5-c4b4a047601a" />
 
 
-## 当前支持的模型
+## 当前支持的模型（根据自己的api选择，其实在做的时候不止只有这些模型，还可以塞更多）
 
 - `qwen3-max`
 - `qwen-max`
@@ -194,15 +194,3 @@ npm.cmd run dev -- --host 0.0.0.0 --port 5177
 - `http://127.0.0.1:8002/health` 是否正常
 - `http://127.0.0.1:8002/models` 是否能返回模型目录
 
-## 文档导航
-
-- [快速开始](D:/codex_create/QUICKSTART.md)
-- [当前版本运行与运维手册](D:/codex_create/docs/12-current-runbook.md)
-- [Windows 启动排障 v2](D:/codex_create/docs/13-windows-troubleshooting-v2.md)
-- [历史快速启动与运维手册](D:/codex_create/docs/10-quickstart-and-ops.md)
-- [历史 Windows 启动排障](D:/codex_create/docs/11-windows-startup-troubleshooting.md)
-- [项目背景](D:/codex_create/docs/01-project-background.md)
-- [整体架构](D:/codex_create/docs/02-architecture.md)
-- [RAG 设计](D:/codex_create/docs/03-rag-design.md)
-- [Agent 工作流](D:/codex_create/docs/04-agent-workflow.md)
-- [评估说明](D:/codex_create/docs/05-evaluation.md)
