@@ -91,6 +91,11 @@ npm.cmd run dev -- --host 0.0.0.0 --port 5177
 http://localhost:5177
 ```
 
+
+界面展示：
+<img width="1920" height="911" alt="image" src="https://github.com/user-attachments/assets/66c5d5cc-957b-4e76-afd5-c4b4a047601a" />
+
+
 ## 当前支持的模型
 
 - `qwen3-max`
