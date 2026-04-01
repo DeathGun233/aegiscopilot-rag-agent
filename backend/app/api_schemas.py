@@ -187,5 +187,31 @@ class EvaluationResponse(BaseModel):
     run: EvaluationRun
 
 
+class AgentTaskSummary(BaseModel):
+    id: str
+    user_id: str
+    conversation_id: str
+    query: str
+    intent: str
+    intent_label: str = ""
+    grounded: bool = False
+    top_score: float = 0.0
+    citations_count: int = 0
+    trace_steps: int = 0
+    route_reason: str = ""
+    final_answer_preview: str = ""
+    provider: str = ""
+    created_at: str
+
+
+class AgentTaskListResponse(BaseModel):
+    tasks: list[AgentTaskSummary] = Field(default_factory=list)
+
+
+class AgentTaskDetailResponse(BaseModel):
+    summary: AgentTaskSummary
+    task: AgentTask
+
+
 class SystemStatsResponse(BaseModel):
     stats: SystemStats

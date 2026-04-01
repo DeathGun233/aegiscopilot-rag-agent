@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/admin/DashboardPage";
 import { DocumentDetailPage } from "./pages/admin/DocumentDetailPage";
 import { EvaluationPage } from "./pages/admin/EvaluationPage";
 import { KnowledgePage } from "./pages/admin/KnowledgePage";
+import { TracePage } from "./pages/admin/TracePage";
 import { UsersPage } from "./pages/admin/UsersPage";
 
 function withShell(element) {
@@ -105,6 +106,7 @@ export const router = createBrowserRouter([
               { path: "overview", element: <DashboardPage /> },
               { path: "knowledge", element: <KnowledgePage /> },
               { path: "knowledge/:documentId", element: <DocumentDetailPage /> },
+              { path: "traces", element: <TracePage /> },
               { path: "users", element: <UsersPage /> },
               { path: "evaluation", element: <EvaluationPage /> },
             ],
