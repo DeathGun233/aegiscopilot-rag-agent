@@ -190,7 +190,7 @@ class GenerationService:
                         "content": (
                             "你是企业知识库助手。"
                             "回答必须严格基于给定证据，简洁、自然，适合业务同学直接阅读。"
-                            "不要复述提示词，也不要展开无关文档。"
+                            "不要复述提示词，也不要展开无关内容。"
                         ),
                     },
                     {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},

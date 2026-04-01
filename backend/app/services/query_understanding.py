@@ -25,15 +25,15 @@ class QueryUnderstandingResult:
 class QueryUnderstandingService:
     _GREETING_PATTERNS = ("hello", "hi", "你好", "在吗", "哈喽", "早上好", "下午好", "晚上好")
     _TASK_PATTERNS = ("总结", "汇总", "梳理", "整理", "清单", "步骤", "对比", "比较", "归纳", "提炼")
-    _FOCUS_COMMANDS = ("总结", "汇总", "梳理", "整理", "归纳", "提炼", "对比", "比较", "清单", "列一下")
+    _FOCUS_COMMANDS = ("总结", "汇总", "梳理", "整理", "归纳", "提炼", "对比", "比较", "清单", "列一个")
     _REFERENTIAL_PATTERNS = ("这个", "这个流程", "这个制度", "这个文档", "那个", "那个流程", "它", "上面", "上一条", "刚才")
-    _GENERIC_PATTERNS = ("帮我看下", "帮我看看", "说一下", "讲讲", "总结一下", "整理一下", "分析一下", "展开说说")
+    _GENERIC_PATTERNS = ("帮我看下", "帮我看看", "说一个", "讲讲", "总结一下", "整理一下", "分析一下", "展开说说")
     _QUESTION_FILLERS = ("是什么", "是啥", "是什么样", "怎么", "如何", "怎样", "哪些", "哪一些", "吗", "呢", "呀")
     _TOPIC_STOPWORDS = (
         "请",
         "帮我",
         "帮忙",
-        "一下",
+        "一个",
         "一下子",
         "我们",
         "公司",
@@ -133,7 +133,7 @@ class QueryUnderstandingService:
                 "你希望我总结或整理哪一项内容？可以直接说制度名、流程名，或者贴出你想处理的主题。",
             )
 
-        if any(word in stripped for word in ("对比", "比较")) and not re.search(r"[和与、/]", stripped) and not history_topic:
+        if any(word in stripped for word in ("对比", "比较")) and not re.search(r"[和与、]", stripped) and not history_topic:
             return (
                 True,
                 "对比类问题缺少比较对象。",
@@ -186,7 +186,7 @@ class QueryUnderstandingService:
                 if not candidate:
                     continue
                 if message.role == MessageRole.assistant and candidate.startswith("依据"):
-                    candidate = candidate.replace("依据", "", 1).strip("，。:： ")
+                    candidate = candidate.replace("依据", "", 1).strip("，。；：")
                 if candidate:
                     return candidate[:48]
         return ""
