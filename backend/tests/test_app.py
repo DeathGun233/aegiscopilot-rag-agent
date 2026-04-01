@@ -22,6 +22,16 @@ def _login_as_admin() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _login_as_member() -> dict[str, str]:
+    response = client.post(
+        "/auth/login",
+        json={"username": "member", "password": settings.member_password},
+    )
+    assert response.status_code == 200
+    token = response.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
@@ -96,3 +106,47 @@ def test_async_reindex_task_flow() -> None:
     document = status_response.json()["document"]
     assert document["index_state"] == "indexed"
     assert document["chunk_count"] >= 1
+
+
+def test_member_cannot_access_admin_routes() -> None:
+    headers = _login_as_member()
+
+    users_response = client.get("/users", headers=headers)
+    assert users_response.status_code == 403
+    assert "管理员" in users_response.json()["detail"]
+
+    create_response = client.post(
+        "/documents",
+        json={
+            "title": "成员尝试创建文档",
+            "content": "这条请求应该被管理员权限拦截。",
+            "source_type": "text",
+            "department": "general",
+            "version": "v1",
+            "tags": ["权限"],
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 403
+
+
+def test_conversation_is_user_scoped() -> None:
+    admin_headers = _login_as_admin()
+    member_headers = _login_as_member()
+
+    create_response = client.post(
+        "/conversations",
+        json={"title": "管理员私有会话"},
+        headers=admin_headers,
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["conversation"]["id"]
+
+    member_list_response = client.get("/conversations", headers=member_headers)
+    assert member_list_response.status_code == 200
+    conversation_ids = [item["id"] for item in member_list_response.json()["conversations"]]
+    assert conversation_id not in conversation_ids
+
+    member_detail_response = client.get(f"/conversations/{conversation_id}", headers=member_headers)
+    assert member_detail_response.status_code == 404
+    assert "会话不存在" in member_detail_response.json()["detail"]

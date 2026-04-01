@@ -11,3 +11,4 @@ coverage/
 backend/.mypy_cache/
 backend/storage/
 frontend/.vite/
+.private/
