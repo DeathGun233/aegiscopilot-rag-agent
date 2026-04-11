@@ -1,36 +1,202 @@
+from importlib import import_module
+from pathlib import Path
+import sys
+import time
+
+import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-client = TestClient(app)
+from app.config import ensure_storage_dirs, settings
+from app.deps import reset_container
 
 
-def test_health() -> None:
+@pytest.fixture()
+def client(tmp_path: Path):
+    original_settings = {
+        "storage_dir": settings.storage_dir,
+        "reports_dir": settings.reports_dir,
+        "llm_provider": settings.llm_provider,
+        "llm_base_url": settings.llm_base_url,
+        "llm_api_key": settings.llm_api_key,
+        "embedding_provider": settings.embedding_provider,
+        "embedding_base_url": settings.embedding_base_url,
+        "embedding_api_key": settings.embedding_api_key,
+    }
+
+    settings.storage_dir = tmp_path / "storage"
+    settings.reports_dir = settings.storage_dir / "reports"
+    settings.llm_provider = "mock"
+    settings.llm_base_url = ""
+    settings.llm_api_key = ""
+    settings.embedding_provider = "disabled"
+    settings.embedding_base_url = ""
+    settings.embedding_api_key = ""
+    ensure_storage_dirs()
+    reset_container()
+
+    app_module = import_module("app.main")
+    with TestClient(app_module.app) as test_client:
+        yield test_client
+
+    for key, value in original_settings.items():
+        setattr(settings, key, value)
+    ensure_storage_dirs()
+    reset_container()
+
+
+def _login_as_admin(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": settings.admin_password},
+    )
+    assert response.status_code == 200
+    token = response.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _login_as_member(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/auth/login",
+        json={"username": "member", "password": settings.member_password},
+    )
+    assert response.status_code == 200
+    token = response.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _wait_for_task_completion(
+    client: TestClient,
+    task_id: str,
+    headers: dict[str, str],
+    timeout: float = 5.0,
+) -> dict:
+    deadline = time.time() + timeout
+    final_task: dict | None = None
+    while time.time() < deadline:
+        task_response = client.get(f"/documents/upload/tasks/{task_id}", headers=headers)
+        assert task_response.status_code == 200
+        final_task = task_response.json()["task"]
+        if final_task["status"] in {"succeeded", "failed"}:
+            return final_task
+        time.sleep(0.05)
+    assert final_task is not None
+    return final_task
+
+
+def test_health(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-def test_document_and_chat_flow() -> None:
+def test_document_and_chat_flow(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+
     create_response = client.post(
         "/documents",
         json={
-            "title": "员工请假制度",
-            "content": "员工请假需要提前申请，年假需要主管审批。",
+            "title": "Employee Leave Policy",
+            "content": (
+                "Employees must submit leave requests one business day in advance. "
+                "Annual leave requires manager approval."
+            ),
             "source_type": "text",
             "department": "hr",
             "version": "v1",
-            "tags": ["请假"],
+            "tags": ["leave"],
         },
+        headers=headers,
     )
+    assert create_response.status_code == 200
     document_id = create_response.json()["document"]["id"]
 
-    index_response = client.post("/documents/index", json={"document_id": document_id})
+    index_response = client.post("/documents/index", json={"document_id": document_id}, headers=headers)
     assert index_response.status_code == 200
     assert index_response.json()["chunks_created"] >= 1
 
-    chat_response = client.post("/chat", json={"query": "请假流程是什么？"})
+    chat_response = client.post(
+        "/chat",
+        json={"query": "What is the employee leave process?"},
+        headers=headers,
+    )
     assert chat_response.status_code == 200
     payload = chat_response.json()
     assert payload["task"]["intent"] == "knowledge_qa"
-    assert "请假" in payload["reply"]["content"]
+    assert "Employees" in payload["reply"]["content"]
+
+
+def test_async_reindex_task_flow(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+
+    create_response = client.post(
+        "/documents",
+        json={
+            "title": "Expense Reimbursement Policy",
+            "content": "Employees must submit invoices, itineraries, and approvals for reimbursement.",
+            "source_type": "text",
+            "department": "finance",
+            "version": "v1",
+            "tags": ["expense"],
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    document_id = create_response.json()["document"]["id"]
+
+    reindex_response = client.post(f"/documents/{document_id}/reindex", headers=headers)
+    assert reindex_response.status_code == 200
+    task = reindex_response.json()["task"]
+    assert task["status"] in {"pending", "running"}
+
+    final_task = _wait_for_task_completion(client, task["id"], headers)
+    assert final_task["status"] == "succeeded", final_task
+
+    status_response = client.get(f"/documents/{document_id}/status", headers=headers)
+    assert status_response.status_code == 200
+    document = status_response.json()["document"]
+    assert document["index_state"] == "indexed"
+    assert document["chunk_count"] >= 1
+
+
+def test_member_cannot_access_admin_routes(client: TestClient) -> None:
+    headers = _login_as_member(client)
+
+    users_response = client.get("/users", headers=headers)
+    assert users_response.status_code == 403
+
+    create_response = client.post(
+        "/documents",
+        json={
+            "title": "Member Should Not Create Documents",
+            "content": "This request should be rejected by admin permission checks.",
+            "source_type": "text",
+            "department": "general",
+            "version": "v1",
+            "tags": ["permission"],
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 403
+
+
+def test_conversation_is_user_scoped(client: TestClient) -> None:
+    admin_headers = _login_as_admin(client)
+    member_headers = _login_as_member(client)
+
+    create_response = client.post(
+        "/conversations",
+        json={"title": "Admin Private Conversation"},
+        headers=admin_headers,
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["conversation"]["id"]
+
+    member_list_response = client.get("/conversations", headers=member_headers)
+    assert member_list_response.status_code == 200
+    conversation_ids = [item["id"] for item in member_list_response.json()["conversations"]]
+    assert conversation_id not in conversation_ids
+
+    member_detail_response = client.get(f"/conversations/{conversation_id}", headers=member_headers)
+    assert member_detail_response.status_code == 404

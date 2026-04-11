@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-
 from pathlib import Path
 
 from fastapi import Header, HTTPException, status
@@ -11,6 +10,7 @@ from .models import User
 from .repositories import (
     ConversationRepository,
     DocumentRepository,
+    DocumentTaskRepository,
     JsonStore,
     SessionRepository,
     TaskRepository,
@@ -19,13 +19,16 @@ from .repositories import (
 from .services.agent import AgentService
 from .services.auth import AuthService
 from .services.documents import DocumentService
+from .services.embeddings import EmbeddingService
 from .services.extraction import ExtractionService
 from .services.generation_service import GenerationService
+from .services.query_understanding import QueryUnderstandingService
 from .services.retrieval import RetrievalService
 from .services.runtime_models import RuntimeModelService
+from .services.runtime_retrieval import RuntimeRetrievalService
 from .services.system import SystemService
-from .services.users import UserService
 from .services.tools import ToolService
+from .services.users import UserService
 
 
 class Container:
@@ -36,12 +39,20 @@ class Container:
             JsonStore(storage / "documents.json"),
             JsonStore(storage / "chunks.json"),
         )
+        self.document_tasks = DocumentTaskRepository(JsonStore(storage / "document_tasks.json"))
         self.users = UserRepository(JsonStore(storage / "users.json"))
         self.sessions = SessionRepository(JsonStore(storage / "sessions.json"))
         self.tasks = TaskRepository(JsonStore(storage / "tasks.json"))
-        self.document_service = DocumentService(self.documents)
+        self.runtime_retrieval_service = RuntimeRetrievalService(storage / "runtime_retrieval.json")
+        self.embedding_service = EmbeddingService()
+        self.document_service = DocumentService(self.documents, self.document_tasks, self.embedding_service)
         self.extraction_service = ExtractionService()
-        self.retrieval_service = RetrievalService(self.documents)
+        self.retrieval_service = RetrievalService(
+            self.documents,
+            self.runtime_retrieval_service,
+            self.embedding_service,
+        )
+        self.query_understanding_service = QueryUnderstandingService()
         self.tool_service = ToolService(self.retrieval_service)
         self.runtime_model_service = RuntimeModelService(storage / "runtime_model.json")
         self.user_service = UserService(self.users)
@@ -52,12 +63,15 @@ class Container:
             tools=self.tool_service,
             tasks=self.tasks,
             generation=self.generation_service,
+            query_understanding=self.query_understanding_service,
         )
         self.system_service = SystemService(
             self.conversations,
             self.documents,
             self.tasks,
             self.runtime_model_service,
+            self.runtime_retrieval_service,
+            self.embedding_service,
         )
 
 
@@ -66,16 +80,20 @@ def get_container() -> Container:
     return Container()
 
 
+def reset_container() -> None:
+    get_container.cache_clear()
+
+
 def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> User:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="璇峰厛鐧诲綍")
     token = authorization.split(" ", 1)[1].strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="璇峰厛鐧诲綍")
     container = get_container()
     try:
         return container.auth_service.get_user_by_token(token)
     except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid session") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="鐧诲綍鎬佸凡澶辨晥锛岃閲嶆柊鐧诲綍") from exc
