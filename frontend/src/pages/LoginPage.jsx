@@ -2,16 +2,19 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
+const showDemoAccounts =
+  typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
 const demoAccounts = [
-  { username: "admin", password: "admin123", label: "Admin" },
-  { username: "member", password: "member123", label: "Member" },
+  { username: "admin", password: "admin123", label: "管理员" },
+  { username: "member", password: "member123", label: "成员" },
 ];
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { appError, login } = useAppContext();
-  const [form, setForm] = useState({ username: "admin", password: "admin123" });
+  const [form, setForm] = useState({ username: "admin", password: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,7 +28,7 @@ export function LoginPage() {
       await login(form.username, form.password);
       navigate(nextPath, { replace: true });
     } catch (loginError) {
-      setError(loginError.message || "Login failed.");
+      setError(loginError.message || "登录失败");
     } finally {
       setSubmitting(false);
     }
@@ -36,31 +39,28 @@ export function LoginPage() {
       <section className="auth-card">
         <div className="auth-hero">
           <span className="hero-pill">AegisCopilot</span>
-          <h1>Sign in to the workspace</h1>
-          <p>
-            This first migration version replaces the old role switcher with a real session flow and
-            admin-only console access.
-          </p>
+          <h1>登录工作台</h1>
+          <p>当前版本使用真实登录态与后台权限控制，会话只在当前页签内保留，并会按时效自动失效。</p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            <span>Username</span>
+            <span>用户名</span>
             <input
               value={form.username}
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-              placeholder="admin"
+              placeholder="请输入用户名"
               autoComplete="username"
             />
           </label>
 
           <label>
-            <span>Password</span>
+            <span>密码</span>
             <input
               type="password"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              placeholder="Enter password"
+              placeholder="请输入密码"
               autoComplete="current-password"
             />
           </label>
@@ -68,24 +68,26 @@ export function LoginPage() {
           {error || appError ? <div className="auth-error">{error || appError}</div> : null}
 
           <button type="submit" className="primary-action auth-submit" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting ? "登录中..." : "登录"}
           </button>
         </form>
 
-        <div className="auth-demo-list">
-          {demoAccounts.map((account) => (
-            <button
-              key={account.username}
-              type="button"
-              className="auth-demo-card"
-              onClick={() => setForm({ username: account.username, password: account.password })}
-            >
-              <strong>{account.label}</strong>
-              <span>{account.username}</span>
-              <small>{account.password}</small>
-            </button>
-          ))}
-        </div>
+        {showDemoAccounts ? (
+          <div className="auth-demo-list">
+            {demoAccounts.map((account) => (
+              <button
+                key={account.username}
+                type="button"
+                className="auth-demo-card"
+                onClick={() => setForm({ username: account.username, password: account.password })}
+              >
+                <strong>{account.label}</strong>
+                <span>{account.username}</span>
+                <small>{account.password}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </section>
     </div>
   );

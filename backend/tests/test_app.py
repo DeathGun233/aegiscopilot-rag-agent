@@ -114,6 +114,20 @@ def _restore_model_settings(original: dict[str, str]) -> None:
     reset_container()
 
 
+def _with_auth_settings(**updates: object) -> dict[str, object]:
+    original = {key: getattr(settings, key) for key in updates}
+    for key, value in updates.items():
+        setattr(settings, key, value)
+    reset_container()
+    return original
+
+
+def _restore_auth_settings(original: dict[str, object]) -> None:
+    for key, value in original.items():
+        setattr(settings, key, value)
+    reset_container()
+
+
 def test_health(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
@@ -287,6 +301,44 @@ def test_stream_chat_surfaces_model_fallback(client: TestClient) -> None:
         assert done_event["task"]["provider"] == "mock-fallback"
     finally:
         _restore_model_settings(original)
+
+
+def test_session_expiry_invalidates_token(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+    token = headers["Authorization"].split(" ", 1)[1]
+
+    from app.deps import get_container
+
+    session = get_container().sessions.get(token)
+    assert session is not None
+    session.expires_at = session.created_at
+    get_container().sessions.save(session)
+
+    response = client.get("/auth/me", headers=headers)
+    assert response.status_code == 401
+
+
+def test_sessions_do_not_persist_by_default(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+    assert headers["Authorization"].startswith("Bearer ")
+    assert not (settings.storage_dir / "sessions.json").exists()
+
+
+def test_non_demo_environment_rejects_default_passwords(client: TestClient) -> None:
+    original = _with_auth_settings(
+        allow_demo_auth=False,
+        admin_password="admin123",
+        member_password="member123",
+    )
+    try:
+        response = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "admin123"},
+        )
+        assert response.status_code == 401
+        assert "默认演示密码" in response.json()["detail"]
+    finally:
+        _restore_auth_settings(original)
 
 
 def test_async_reindex_task_flow(client: TestClient) -> None:

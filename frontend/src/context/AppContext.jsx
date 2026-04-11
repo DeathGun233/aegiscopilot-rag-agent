@@ -5,6 +5,7 @@ import {
   getStoredAuthToken,
   setStoredAuthToken,
   uploadFile,
+  withQuery,
 } from "../lib/api";
 
 const AppContext = createContext(null);
@@ -53,6 +54,11 @@ export function AppProvider({ children }) {
     return data.documents;
   }
 
+  async function queryDocuments(params = {}) {
+    const data = await fetchJson(withQuery("/documents", params));
+    return data.documents;
+  }
+
   async function refreshStats() {
     const data = await fetchJson("/system/stats");
     setStats(data.stats);
@@ -73,8 +79,12 @@ export function AppProvider({ children }) {
     const meData = await fetchJson("/auth/me");
     setCurrentUser(meData.user);
 
-    const [statsData, modelsData] = await Promise.all([refreshStats(), fetchJson("/models")]);
-    const [documentsData, conversationsData] = await Promise.all([refreshDocuments(), refreshConversations()]);
+    const [statsData, modelsData, documentsData, conversationsData] = await Promise.all([
+      refreshStats(),
+      fetchJson("/models"),
+      refreshDocuments(),
+      refreshConversations(),
+    ]);
     setModelCatalog(modelsData.catalog);
     setStats(statsData);
 
@@ -133,7 +143,7 @@ export function AppProvider({ children }) {
             setConversations,
             setEvaluationRun,
           });
-          setAppError(error.message || "Failed to load application data.");
+          setAppError(error.message || "应用数据加载失败");
         }
       } finally {
         if (!cancelled) {
@@ -157,6 +167,11 @@ export function AppProvider({ children }) {
     setStoredAuthToken(data.token);
     setAuthToken(data.token);
     setCurrentUser(data.user);
+    setGlobalNotice(
+      data.demo_mode
+        ? "当前为本地演示登录模式，会话仅在当前浏览器页签内有效。"
+        : "已启用受限登录态，会话到期后需要重新登录。",
+    );
     setAppError("");
     return data.user;
   }
@@ -167,7 +182,7 @@ export function AppProvider({ children }) {
         await fetchJson("/auth/logout", { method: "POST" });
       }
     } catch {
-      // Ignore logout failures and clear the local session anyway.
+      // 忽略退出失败，仍然清理本地登录态。
     } finally {
       clearStoredAuthToken();
       setAuthToken("");
@@ -184,7 +199,7 @@ export function AppProvider({ children }) {
     }
   }
 
-  async function createConversation(title = "New conversation") {
+  async function createConversation(title = "新对话") {
     const data = await fetchJson("/conversations", {
       method: "POST",
       body: { title },
@@ -209,6 +224,25 @@ export function AppProvider({ children }) {
     return data;
   }
 
+  async function reindexDocument(documentId) {
+    const data = await fetchJson(`/documents/${documentId}/reindex`, {
+      method: "POST",
+    });
+    await refreshDocuments();
+    await refreshStats();
+    return data;
+  }
+
+  async function bulkReindexDocuments(mode = "missing_embeddings") {
+    const data = await fetchJson("/documents/reindex-batch", {
+      method: "POST",
+      body: { mode },
+    });
+    await refreshDocuments();
+    await refreshStats();
+    return data;
+  }
+
   async function deleteDocument(documentId) {
     await fetchJson(`/documents/${documentId}`, {
       method: "DELETE",
@@ -219,6 +253,47 @@ export function AppProvider({ children }) {
 
   async function fetchDocument(documentId) {
     return fetchJson(`/documents/${documentId}`);
+  }
+
+  async function fetchDocumentStatus(documentId) {
+    return fetchJson(`/documents/${documentId}/status`);
+  }
+
+  async function fetchUploadTask(taskId) {
+    return fetchJson(`/documents/upload/tasks/${taskId}`);
+  }
+
+  async function fetchAgentTasks(params = {}) {
+    const data = await fetchJson(withQuery("/tasks", params));
+    return data.tasks;
+  }
+
+  async function fetchAgentTask(taskId) {
+    return fetchJson(`/tasks/${taskId}`);
+  }
+
+  async function fetchRetrievalSettings() {
+    const data = await fetchJson("/retrieval/settings");
+    return data.settings;
+  }
+
+  async function updateRetrievalSettings(payload) {
+    const data = await fetchJson("/retrieval/settings", {
+      method: "POST",
+      body: payload,
+    });
+    await refreshStats();
+    return data.settings;
+  }
+
+  async function previewRetrieval(query, topK) {
+    return fetchJson("/retrieval/preview", {
+      method: "POST",
+      body: {
+        query,
+        top_k: topK || null,
+      },
+    });
   }
 
   async function selectModel(modelId) {
@@ -246,6 +321,7 @@ export function AppProvider({ children }) {
       value={{
         appError,
         bootstrapping,
+        bulkReindexDocuments,
         conversations,
         createConversation,
         currentUser,
@@ -254,21 +330,30 @@ export function AppProvider({ children }) {
         documents,
         evaluationRun,
         fetchDocument,
+        fetchDocumentStatus,
+        fetchRetrievalSettings,
+        fetchAgentTask,
+        fetchAgentTasks,
+        fetchUploadTask,
         globalNotice,
         isAdmin,
         isAuthenticated,
         login,
         logout,
         modelCatalog,
+        previewRetrieval,
+        queryDocuments,
         refreshApp,
         refreshConversations,
         refreshDocuments,
         refreshStats,
         refreshUsers,
+        reindexDocument,
         runEvaluation,
         selectModel,
         setGlobalNotice,
         stats,
+        updateRetrievalSettings,
         uploadDocumentFile,
         users,
       }}
