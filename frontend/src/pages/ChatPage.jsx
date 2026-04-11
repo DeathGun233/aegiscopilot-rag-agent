@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { MessageList } from "../components/chat/MessageList";
@@ -6,27 +6,27 @@ import { useAppContext } from "../context/AppContext";
 import { fetchJson, streamChat } from "../lib/api";
 
 const starterPrompts = [
-  "What is the employee leave process?",
-  "What should be checked before a production release?",
-  "Summarize the travel reimbursement process.",
-  "What should a cross-border ecommerce company watch for in personal data protection?",
+  "员工请假流程是什么？",
+  "生产发布前需要检查什么？",
+  "请总结差旅报销流程。",
+  "跨境电商公司在个人信息保护方面要注意什么？",
 ];
 
 const scenarioCards = [
   {
-    title: "Policy QA",
-    description: "Ask grounded questions about internal policy, process, and standards.",
-    prompt: "What is the employee leave process?",
+    title: "制度问答",
+    description: "围绕企业制度、流程和规范发起基于知识库的提问。",
+    prompt: "员工请假流程是什么？",
   },
   {
-    title: "Process summary",
-    description: "Turn scattered evidence into a more structured operational summary.",
-    prompt: "Summarize the travel reimbursement process.",
+    title: "流程总结",
+    description: "把分散证据整理成更结构化的操作结论。",
+    prompt: "请总结差旅报销流程。",
   },
   {
-    title: "Release checklist",
-    description: "Convert release questions into a practical pre-launch checklist.",
-    prompt: "What should be checked before a production release?",
+    title: "发布检查",
+    description: "把发布类问题转成上线前可执行的检查清单。",
+    prompt: "生产发布前需要检查什么？",
   },
 ];
 
@@ -38,7 +38,10 @@ export function ChatPage() {
   const [query, setQuery] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamStatus, setStreamStatus] = useState("");
+  const [streamMeta, setStreamMeta] = useState({ elapsedMs: 0, hits: null });
+  const [streamWaitSeconds, setStreamWaitSeconds] = useState(0);
   const [citationMap, setCitationMap] = useState({});
+  const threadEndRef = useRef(null);
 
   const currentConversation = useMemo(
     () => conversations.find((item) => item.id === conversationId) || null,
@@ -50,12 +53,14 @@ export function ChatPage() {
       setMessages(currentConversation.messages || []);
       setCitationMap({});
       setStreamStatus("");
+      setStreamMeta({ elapsedMs: 0, hits: null });
       return;
     }
     if (!conversationId) {
       setMessages([]);
       setCitationMap({});
       setStreamStatus("");
+      setStreamMeta({ elapsedMs: 0, hits: null });
       return;
     }
 
@@ -67,6 +72,47 @@ export function ChatPage() {
         navigate("/chat");
       });
   }, [conversationId, currentConversation, navigate]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({
+        block: "end",
+        behavior: messages.length > 1 ? "smooth" : "auto",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, isStreaming, streamStatus]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setStreamWaitSeconds(0);
+      return undefined;
+    }
+
+    const startedAt = window.Date.now();
+    setStreamWaitSeconds(0);
+    const timer = window.setInterval(() => {
+      setStreamWaitSeconds(Math.floor((window.Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isStreaming]);
+
+  const streamStatusLabel = useMemo(() => {
+    if (!streamStatus) {
+      return "";
+    }
+
+    const details = [streamStatus];
+    const elapsedSeconds = Math.max(streamWaitSeconds, Math.floor((streamMeta.elapsedMs || 0) / 1000));
+    if (isStreaming && elapsedSeconds > 0) {
+      details.push(`已等待 ${elapsedSeconds} 秒`);
+    }
+    if (typeof streamMeta.hits === "number" && streamMeta.hits > 0) {
+      details.push(`证据 ${streamMeta.hits} 条`);
+    }
+    return details.join(" · ");
+  }, [isStreaming, streamMeta.elapsedMs, streamMeta.hits, streamStatus, streamWaitSeconds]);
 
   async function handleSendMessage(event) {
     event.preventDefault();
@@ -82,7 +128,8 @@ export function ChatPage() {
       { id: assistantId, role: "assistant", content: "" },
     ]);
     setIsStreaming(true);
-    setStreamStatus("Connecting to the model...");
+    setStreamStatus("正在建立流式连接...");
+    setStreamMeta({ elapsedMs: 0, hits: null });
     setQuery("");
     setCitationMap((current) => ({ ...current, [assistantId]: [] }));
 
@@ -90,28 +137,35 @@ export function ChatPage() {
     let answer = "";
 
     try {
-      await streamChat({ query: trimmed, conversationId }, {
-        onConversation(payload) {
-          nextConversationId = payload.conversation_id;
+      await streamChat(
+        { query: trimmed, conversationId },
+        {
+          onConversation(payload) {
+            nextConversationId = payload.conversation_id;
+          },
+          onStatus(payload) {
+            setStreamStatus(payload.message);
+            setStreamMeta({
+              elapsedMs: payload.elapsed_ms ?? 0,
+              hits: typeof payload.hits === "number" ? payload.hits : null,
+            });
+          },
+          onDelta(payload) {
+            answer += payload.content;
+            setMessages((current) =>
+              current.map((message) => (message.id === assistantId ? { ...message, content: answer } : message)),
+            );
+          },
+          onDone(payload) {
+            if (payload.task?.citations?.length) {
+              setCitationMap((current) => ({
+                ...current,
+                [assistantId]: payload.task.citations,
+              }));
+            }
+          },
         },
-        onStatus(payload) {
-          setStreamStatus(payload.message);
-        },
-        onDelta(payload) {
-          answer += payload.content;
-          setMessages((current) =>
-            current.map((message) => (message.id === assistantId ? { ...message, content: answer } : message)),
-          );
-        },
-        onDone(payload) {
-          if (payload.task?.citations?.length) {
-            setCitationMap((current) => ({
-              ...current,
-              [assistantId]: payload.task.citations,
-            }));
-          }
-        },
-      });
+      );
 
       const nextConversations = await refreshConversations();
       await refreshStats();
@@ -125,10 +179,11 @@ export function ChatPage() {
     } catch (error) {
       setMessages((current) =>
         current.map((message) =>
-          message.id === assistantId ? { ...message, content: "The model request failed. Please try again." } : message,
+          message.id === assistantId ? { ...message, content: "模型请求失败，请稍后重试。" } : message,
         ),
       );
-      setStreamStatus(error.message || "The model request failed.");
+      setStreamStatus(error.message || "模型请求失败");
+      setStreamMeta({ elapsedMs: 0, hits: null });
     } finally {
       setIsStreaming(false);
     }
@@ -138,47 +193,66 @@ export function ChatPage() {
     <div className="page chat-page">
       <header className="page-header">
         <div>
-          <span className="page-kicker">AegisCopilot / Chat</span>
-          <h1>{currentConversation?.title || "New conversation"}</h1>
+          <span className="page-kicker">AegisCopilot / 对话</span>
+          <h1>{currentConversation?.title || "新对话"}</h1>
         </div>
       </header>
 
-      <section className="chat-hero">
-        <div className="hero-copy">
-          <span className="hero-pill">RAG Assistant</span>
-          <h2>Turn questions into grounded answers</h2>
-          <p>Ask structured questions, search internal evidence, and stream concise responses for real business use.</p>
-        </div>
-
-        <ChatComposer
-          query={query}
-          onQueryChange={setQuery}
-          onSubmit={handleSendMessage}
-          isStreaming={isStreaming}
-          streamStatus={streamStatus}
-          starterPrompts={starterPrompts}
-        />
-
-        <div className="scenario-grid">
-          {scenarioCards.map((item) => (
-            <button key={item.title} type="button" className="scenario-tile" onClick={() => setQuery(item.prompt)}>
-              <strong>{item.title}</strong>
-              <p>{item.description}</p>
-              <small>{item.prompt}</small>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="thread-panel">
-        <div className="panel-head">
-          <div>
-            <span className="panel-kicker">Conversation</span>
-            <h3>Thread</h3>
+      <section className="chat-shell">
+        <section className="thread-panel thread-panel--chat">
+          <div className="panel-head chat-thread-head">
+            <div>
+              <span className="panel-kicker">当前会话</span>
+              <h3>{currentConversation?.title || "新对话"}</h3>
+            </div>
+            <span className={isStreaming ? "status-dot live" : "status-dot"}>
+              {isStreaming ? "正在流式回答" : messages.length ? `${messages.length} 条消息` : "等待你的第一个问题"}
+            </span>
           </div>
-          <span className={isStreaming ? "status-dot live" : "status-dot"}>Streaming</span>
+
+          <div className="chat-thread-scroll">
+            {messages.length ? (
+              <MessageList messages={messages} citationMap={citationMap} />
+            ) : (
+              <div className="chat-empty-state">
+                <div className="chat-empty-hero">
+                  <span className="hero-pill">RAG 智能问答</span>
+                  <h2>把问题变成有依据的答案</h2>
+                  <p>通过结构化提问、知识检索与流式生成，服务真实业务场景下的企业知识问答。</p>
+                </div>
+
+                <div className="chat-empty-grid">
+                  {scenarioCards.map((item) => (
+                    <button
+                      key={item.title}
+                      type="button"
+                      className="scenario-tile"
+                      onClick={() => setQuery(item.prompt)}
+                    >
+                      <strong>{item.title}</strong>
+                      <p>{item.description}</p>
+                      <small>{item.prompt}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={threadEndRef} />
+          </div>
+        </section>
+
+        <div className="chat-dock">
+          <ChatComposer
+            className="chat-composer chat-composer--dock"
+            query={query}
+            onQueryChange={setQuery}
+            onSubmit={handleSendMessage}
+            isStreaming={isStreaming}
+            streamStatus={streamStatusLabel}
+            starterPrompts={starterPrompts}
+            rows={3}
+          />
         </div>
-        <MessageList messages={messages} citationMap={citationMap} />
       </section>
     </div>
   );

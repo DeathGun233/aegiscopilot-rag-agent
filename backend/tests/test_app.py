@@ -1,4 +1,5 @@
 from importlib import import_module
+import json
 from pathlib import Path
 import sys
 import time
@@ -85,6 +86,15 @@ def _wait_for_task_completion(
     return final_task
 
 
+def _parse_sse_frames(body: str) -> list[dict]:
+    frames: list[dict] = []
+    for block in body.split("\n\n"):
+        if not block.startswith("data: "):
+            continue
+        frames.append(json.loads(block[6:]))
+    return frames
+
+
 def test_health(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
@@ -125,6 +135,58 @@ def test_document_and_chat_flow(client: TestClient) -> None:
     payload = chat_response.json()
     assert payload["task"]["intent"] == "knowledge_qa"
     assert "Employees" in payload["reply"]["content"]
+
+
+def test_stream_chat_reports_progress_before_answer(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+
+    create_response = client.post(
+        "/documents",
+        json={
+            "title": "Release Checklist",
+            "content": (
+                "Before production release, teams must complete code review, "
+                "run regression checks, and confirm rollback procedures."
+            ),
+            "source_type": "text",
+            "department": "engineering",
+            "version": "v1",
+            "tags": ["release"],
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    document_id = create_response.json()["document"]["id"]
+
+    index_response = client.post("/documents/index", json={"document_id": document_id}, headers=headers)
+    assert index_response.status_code == 200
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"query": "What should we check before production release?"},
+        headers=headers,
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert response.headers["cache-control"] == "no-cache, no-transform"
+        body = "".join(response.iter_text())
+
+    events = _parse_sse_frames(body)
+    assert events[0]["type"] == "conversation"
+
+    status_events = [event for event in events if event["type"] == "status"]
+    status_stages = [event["stage"] for event in status_events]
+    assert "understand_query" in status_stages
+    assert "retrieve_context" in status_stages
+    assert "generate_answer" in status_stages
+
+    retrieve_index = next(index for index, event in enumerate(events) if event.get("stage") == "retrieve_context")
+    generate_index = next(index for index, event in enumerate(events) if event.get("stage") == "generate_answer")
+    first_delta_index = next(index for index, event in enumerate(events) if event["type"] == "delta")
+
+    assert retrieve_index < generate_index < first_delta_index
+    assert any(event["message"].startswith("已完成检索") for event in status_events)
 
 
 def test_async_reindex_task_flow(client: TestClient) -> None:
