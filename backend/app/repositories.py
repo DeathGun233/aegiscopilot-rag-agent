@@ -43,7 +43,7 @@ class ConversationRepository:
                 conversation = Conversation.model_validate(record)
                 self._store[conversation.id] = conversation
 
-    def create(self, title: str = "???", owner_id: str = "admin") -> Conversation:
+    def create(self, title: str = "新对话", owner_id: str = "admin") -> Conversation:
         conversation = Conversation(title=title, owner_id=owner_id)
         self._store[conversation.id] = conversation
         self._persist()

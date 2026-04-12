@@ -6,8 +6,8 @@ const showDemoAccounts =
   typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
 const demoAccounts = [
-  { username: "admin", password: "admin123", label: "???" },
-  { username: "member", password: "member123", label: "??" },
+  { username: "admin", password: "admin123", label: "管理员" },
+  { username: "member", password: "member123", label: "成员" },
 ];
 
 export function LoginPage() {
@@ -28,7 +28,7 @@ export function LoginPage() {
       await login(form.username, form.password);
       navigate(nextPath, { replace: true });
     } catch (loginError) {
-      setError(loginError.message || "????");
+      setError(loginError.message || "登录失败");
     } finally {
       setSubmitting(false);
     }
@@ -39,28 +39,28 @@ export function LoginPage() {
       <section className="auth-card">
         <div className="auth-hero">
           <span className="hero-pill">AegisCopilot</span>
-          <h1>?????</h1>
-          <p>?????????????????????????????????????????</p>
+          <h1>登录工作台</h1>
+          <p>当前版本使用真实登录态与后台权限控制，会话只在当前页签内保留，并会按时效自动失效。</p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            <span>???</span>
+            <span>用户名</span>
             <input
               value={form.username}
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-              placeholder="??????"
+              placeholder="请输入用户名"
               autoComplete="username"
             />
           </label>
 
           <label>
-            <span>??</span>
+            <span>密码</span>
             <input
               type="password"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              placeholder="?????"
+              placeholder="请输入密码"
               autoComplete="current-password"
             />
           </label>
@@ -68,7 +68,7 @@ export function LoginPage() {
           {error || appError ? <div className="auth-error">{error || appError}</div> : null}
 
           <button type="submit" className="primary-action auth-submit" disabled={submitting}>
-            {submitting ? "???..." : "??"}
+            {submitting ? "登录中..." : "登录"}
           </button>
         </form>
 

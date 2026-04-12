@@ -6,27 +6,27 @@ import { useAppContext } from "../context/AppContext";
 import { fetchJson, streamChat } from "../lib/api";
 
 const starterPrompts = [
-  "??????????",
-  "????????????",
-  "??????????",
-  "?????????????????????",
+  "员工请假流程是什么？",
+  "生产发布前需要检查什么？",
+  "请总结差旅报销流程。",
+  "跨境电商公司在个人信息保护方面要注意什么？",
 ];
 
 const scenarioCards = [
   {
-    title: "????",
-    description: "???????????????????????",
-    prompt: "??????????",
+    title: "制度问答",
+    description: "围绕企业制度、流程和规范发起基于知识库的提问。",
+    prompt: "员工请假流程是什么？",
   },
   {
-    title: "????",
-    description: "??????????????????",
-    prompt: "??????????",
+    title: "流程总结",
+    description: "把分散证据整理成更结构化的操作结论。",
+    prompt: "请总结差旅报销流程。",
   },
   {
-    title: "????",
-    description: "????????????????????",
-    prompt: "????????????",
+    title: "发布检查",
+    description: "把发布类问题转成上线前可执行的检查清单。",
+    prompt: "生产发布前需要检查什么？",
   },
 ];
 
@@ -106,12 +106,12 @@ export function ChatPage() {
     const details = [streamStatus];
     const elapsedSeconds = Math.max(streamWaitSeconds, Math.floor((streamMeta.elapsedMs || 0) / 1000));
     if (isStreaming && elapsedSeconds > 0) {
-      details.push(`??? ${elapsedSeconds} ?`);
+      details.push(`已等待 ${elapsedSeconds} 秒`);
     }
     if (typeof streamMeta.hits === "number" && streamMeta.hits > 0) {
-      details.push(`?? ${streamMeta.hits} ?`);
+      details.push(`证据 ${streamMeta.hits} 条`);
     }
-    return details.join(" ? ");
+    return details.join(" · ");
   }, [isStreaming, streamMeta.elapsedMs, streamMeta.hits, streamStatus, streamWaitSeconds]);
 
   async function handleSendMessage(event) {
@@ -128,7 +128,7 @@ export function ChatPage() {
       { id: assistantId, role: "assistant", content: "" },
     ]);
     setIsStreaming(true);
-    setStreamStatus("????????...");
+    setStreamStatus("正在建立流式连接...");
     setStreamMeta({ elapsedMs: 0, hits: null });
     setQuery("");
     setCitationMap((current) => ({ ...current, [assistantId]: [] }));
@@ -179,10 +179,10 @@ export function ChatPage() {
     } catch (error) {
       setMessages((current) =>
         current.map((message) =>
-          message.id === assistantId ? { ...message, content: "?????????????" } : message,
+          message.id === assistantId ? { ...message, content: "模型请求失败，请稍后重试。" } : message,
         ),
       );
-      setStreamStatus(error.message || "??????");
+      setStreamStatus(error.message || "模型请求失败");
       setStreamMeta({ elapsedMs: 0, hits: null });
     } finally {
       setIsStreaming(false);
@@ -193,8 +193,8 @@ export function ChatPage() {
     <div className="page chat-page">
       <header className="page-header">
         <div>
-          <span className="page-kicker">AegisCopilot / ??</span>
-          <h1>{currentConversation?.title || "???"}</h1>
+          <span className="page-kicker">AegisCopilot / 对话</span>
+          <h1>{currentConversation?.title || "新对话"}</h1>
         </div>
       </header>
 
@@ -202,11 +202,11 @@ export function ChatPage() {
         <section className="thread-panel thread-panel--chat">
           <div className="panel-head chat-thread-head">
             <div>
-              <span className="panel-kicker">????</span>
-              <h3>{currentConversation?.title || "???"}</h3>
+              <span className="panel-kicker">当前会话</span>
+              <h3>{currentConversation?.title || "新对话"}</h3>
             </div>
             <span className={isStreaming ? "status-dot live" : "status-dot"}>
-              {isStreaming ? "??????" : messages.length ? `${messages.length} ???` : "?????????"}
+              {isStreaming ? "正在流式回答" : messages.length ? `${messages.length} 条消息` : "等待你的第一个问题"}
             </span>
           </div>
 
@@ -216,9 +216,9 @@ export function ChatPage() {
             ) : (
               <div className="chat-empty-state">
                 <div className="chat-empty-hero">
-                  <span className="hero-pill">RAG ????</span>
-                  <h2>???????????</h2>
-                  <p>???????????????????????????????????</p>
+                  <span className="hero-pill">RAG 智能问答</span>
+                  <h2>把问题变成有依据的答案</h2>
+                  <p>通过结构化提问、知识检索与流式生成，服务真实业务场景下的企业知识问答。</p>
                 </div>
 
                 <div className="chat-empty-grid">

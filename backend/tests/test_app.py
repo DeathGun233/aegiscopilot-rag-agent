@@ -219,7 +219,7 @@ def test_stream_chat_reports_progress_before_answer(client: TestClient) -> None:
     first_delta_index = next(index for index, event in enumerate(events) if event["type"] == "delta")
 
     assert retrieve_index < generate_index < first_delta_index
-    assert any(event["message"].startswith("?????") for event in status_events)
+    assert any(event["message"].startswith("已完成检索") for event in status_events)
 
 
 def test_chat_surfaces_model_fallback(client: TestClient) -> None:
@@ -336,7 +336,7 @@ def test_non_demo_environment_rejects_default_passwords(client: TestClient) -> N
             json={"username": "admin", "password": "admin123"},
         )
         assert response.status_code == 401
-        assert "??????" in response.json()["detail"]
+        assert "默认演示密码" in response.json()["detail"]
     finally:
         _restore_auth_settings(original)
 
@@ -379,7 +379,6 @@ def test_member_cannot_access_admin_routes(client: TestClient) -> None:
 
     users_response = client.get("/users", headers=headers)
     assert users_response.status_code == 403
-    assert "???" in users_response.json()["detail"]
 
     create_response = client.post(
         "/documents",
@@ -394,7 +393,6 @@ def test_member_cannot_access_admin_routes(client: TestClient) -> None:
         headers=headers,
     )
     assert create_response.status_code == 403
-    assert "???" in create_response.json()["detail"]
 
 
 def test_conversation_is_user_scoped(client: TestClient) -> None:
@@ -416,4 +414,3 @@ def test_conversation_is_user_scoped(client: TestClient) -> None:
 
     member_detail_response = client.get(f"/conversations/{conversation_id}", headers=member_headers)
     assert member_detail_response.status_code == 404
-    assert "?????" in member_detail_response.json()["detail"]

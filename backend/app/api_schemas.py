@@ -28,8 +28,8 @@ class DocumentTaskSummary(DocumentTask):
 class DocumentSummary(Document):
     chunk_count: int = 0
     indexed: bool = False
-    index_state_label: str = "???"
-    indexed_label: str = "???"
+    index_state_label: str = "待索引"
+    indexed_label: str = "未索引"
     embedded_chunk_count: int = 0
     missing_embedding_chunks: int = 0
     embedding_ready: bool = False
@@ -110,7 +110,7 @@ class ChatResponse(BaseModel):
 
 
 class ConversationCreateRequest(BaseModel):
-    title: str = "???"
+    title: str = "新对话"
 
 
 class DocumentCreateRequest(BaseModel):

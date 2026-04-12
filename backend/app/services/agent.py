@@ -74,31 +74,31 @@ class AgentService:
         steps = self._workflow_steps()
         started_at = time.perf_counter()
 
-        yield self._stream_status("?????????...", stage="understand_query", started_at=started_at)
+        yield self._stream_status("正在分析问题上下文...", stage="understand_query", started_at=started_at)
         self._understand_query(context)
-        yield self._stream_status("????????????...", stage="clarification_check", started_at=started_at)
+        yield self._stream_status("正在判断是否需要补充澄清...", stage="clarification_check", started_at=started_at)
         self._clarification_check(context)
 
         if context.clarification_needed:
             self._plan_response(context)
-            yield self._stream_status("?????????????????...", stage="clarification_response", started_at=started_at)
+            yield self._stream_status("需要补充更多信息，正在生成澄清问题...", stage="clarification_response", started_at=started_at)
             context.answer = context.clarification_prompt
             yield {"type": "delta", "content": context.answer}
         else:
-            yield self._stream_status("????????...", stage="query_rewrite", started_at=started_at)
+            yield self._stream_status("正在改写查询表达...", stage="query_rewrite", started_at=started_at)
             self._rewrite_query(context)
-            yield self._stream_status("????????...", stage="query_expand", started_at=started_at)
+            yield self._stream_status("正在扩展检索表达...", stage="query_expand", started_at=started_at)
             self._expand_query(context)
-            yield self._stream_status("????????...", stage="intent_route", started_at=started_at)
+            yield self._stream_status("正在识别问题意图...", stage="intent_route", started_at=started_at)
             self._detect_intent(context)
 
             if context.intent == Intent.chitchat:
                 self._plan_response(context)
-                yield self._stream_status("??????????????...", stage="direct_reply", started_at=started_at)
+                yield self._stream_status("识别为轻量对话，正在直接回复...", stage="direct_reply", started_at=started_at)
                 context.answer = self._greeting_answer()
                 yield {"type": "delta", "content": context.answer}
             else:
-                yield self._stream_status("????????...", stage="retrieve_context", started_at=started_at)
+                yield self._stream_status("正在执行混合检索...", stage="retrieve_context", started_at=started_at)
                 self._retrieve_context(context)
                 self._plan_response(context)
 
@@ -106,7 +106,7 @@ class AgentService:
                 context.retrieval_results = supporting_results
                 if supporting_results:
                     yield self._stream_status(
-                        f"???????? {len(supporting_results)} ?????????????...",
+                        f"已完成检索，命中 {len(supporting_results)} 条高相关证据，正在生成回答...",
                         stage="generate_answer",
                         started_at=started_at,
                         hits=len(supporting_results),
@@ -125,7 +125,7 @@ class AgentService:
                             context.generation_reason = item.fallback_reason
                             if item.degraded:
                                 yield self._stream_status(
-                                    "????????????????????...",
+                                    "模型调用失败，已切换为基于证据的降级摘要...",
                                     stage="generation_fallback",
                                     started_at=started_at,
                                     degraded=True,
@@ -135,7 +135,7 @@ class AgentService:
                         yield {"type": "delta", "content": item.content}
                 else:
                     yield self._stream_status(
-                        "?????????????????...",
+                        "当前未检索到足够证据，正在整理说明...",
                         stage="insufficient_evidence",
                         started_at=started_at,
                         hits=0,
@@ -347,8 +347,8 @@ class AgentService:
         )
         if not context.grounded and context.intent != Intent.chitchat and not context.clarification_needed:
             context.answer = (
-                "?????????????????????????"
-                "???????????????????????"
+                "我检索到少量相关内容，但证据还不足以支撑可靠结论。"
+                "建议进一步缩小问题范围，或者补充更多内部资料。"
             )
         context.trace.append(
             {
@@ -379,11 +379,11 @@ class AgentService:
 
     @staticmethod
     def _greeting_answer() -> str:
-        return "????? AegisCopilot?????????????????????????????????"
+        return "你好，我是 AegisCopilot。你可以向我咨询企业制度、业务流程、产品文档或技术规范相关的问题。"
 
     @staticmethod
     def _insufficient_evidence_answer() -> str:
-        return "???????????????????????"
+        return "当前知识库里还没有足够证据支撑这个问题的回答。"
 
     @staticmethod
     def _stream_status(

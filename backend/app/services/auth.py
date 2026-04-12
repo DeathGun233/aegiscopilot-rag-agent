@@ -20,7 +20,7 @@ class AuthService:
     def login(self, username: str, password: str) -> tuple[User, AuthSession]:
         user = self._find_user(username)
         if user is None or not self._password_matches(user.id, password):
-            raise ValueError("????????")
+            raise ValueError("用户名或密码错误")
         self._validate_password_policy(user.id)
         now = datetime.now(timezone.utc)
         session = AuthSession(
@@ -66,4 +66,4 @@ class AuthService:
             "member": settings.member_password,
         }.get(user_id, "")
         if configured_password and configured_password == self._DEFAULT_PASSWORDS.get(user_id):
-            raise ValueError("?????????????????????????????")
+            raise ValueError("当前环境禁止使用默认演示密码，请先通过环境变量配置安全密码")
