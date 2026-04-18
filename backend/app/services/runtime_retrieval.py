@@ -5,12 +5,18 @@ from pathlib import Path
 
 from ..config import settings
 from ..models import RetrievalSettings, RetrievalStrategy
+from ..sql_repositories import SqlRuntimeSettingsRepository
 
 
 class RuntimeRetrievalService:
-    def __init__(self, storage_path: Path) -> None:
+    def __init__(
+        self,
+        storage_path: Path,
+        runtime_store: SqlRuntimeSettingsRepository | None = None,
+    ) -> None:
         self.storage_path = storage_path
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self.runtime_store = runtime_store
 
     def get_settings(self) -> RetrievalSettings:
         payload = self._load_payload()
@@ -35,10 +41,18 @@ class RuntimeRetrievalService:
             update={key: value for key, value in updates.items() if value is not None},
         )
         self._validate(merged)
-        self.storage_path.write_text(merged.model_dump_json(indent=2), encoding="utf-8")
+        payload = merged.model_dump(mode="json")
+        if self.runtime_store:
+            self.runtime_store.set("runtime_retrieval", payload)
+        else:
+            self.storage_path.write_text(merged.model_dump_json(indent=2), encoding="utf-8")
         return merged
 
     def _load_payload(self) -> dict[str, object]:
+        if self.runtime_store:
+            payload = self.runtime_store.get("runtime_retrieval")
+            if payload:
+                return payload
         if not self.storage_path.exists():
             return {}
         try:

@@ -5,12 +5,18 @@ from pathlib import Path
 
 from ..config import settings
 from ..models import ModelCatalog, ModelOption
+from ..sql_repositories import SqlRuntimeSettingsRepository
 
 
 class RuntimeModelService:
-    def __init__(self, storage_path: Path) -> None:
+    def __init__(
+        self,
+        storage_path: Path,
+        runtime_store: SqlRuntimeSettingsRepository | None = None,
+    ) -> None:
         self.storage_path = storage_path
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self.runtime_store = runtime_store
         self._options = [
             ModelOption(
                 id="qwen3-max",
@@ -62,20 +68,31 @@ class RuntimeModelService:
         )
 
     def get_active_model(self) -> str:
-        if not self.storage_path.exists():
-            return settings.llm_model
-        try:
-            payload = json.loads(self.storage_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return settings.llm_model
+        payload = self._load_payload()
         active_model = payload.get("active_model", settings.llm_model)
         return active_model if active_model in self._allowed else settings.llm_model
 
     def select_model(self, model_id: str) -> ModelCatalog:
         if model_id not in self._allowed:
             raise ValueError(f"unsupported model: {model_id}")
-        self.storage_path.write_text(
-            json.dumps({"active_model": model_id}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        payload = {"active_model": model_id}
+        if self.runtime_store:
+            self.runtime_store.set("runtime_model", payload)
+        else:
+            self.storage_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         return self.get_catalog()
+
+    def _load_payload(self) -> dict[str, object]:
+        if self.runtime_store:
+            payload = self.runtime_store.get("runtime_model")
+            if payload:
+                return payload
+        if not self.storage_path.exists():
+            return {}
+        try:
+            return json.loads(self.storage_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}

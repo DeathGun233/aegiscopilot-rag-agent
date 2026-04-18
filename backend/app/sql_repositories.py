@@ -158,6 +158,12 @@ class SqlDatabase:
             """,
             "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at)",
+            """
+            CREATE TABLE IF NOT EXISTS runtime_settings (
+              key TEXT PRIMARY KEY,
+              payload TEXT NOT NULL
+            )
+            """,
         ]
         for statement in statements:
             self.execute(statement)
@@ -543,3 +549,26 @@ class SqlSessionRepository:
         )
         self.db.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
         return len(rows)
+
+
+class SqlRuntimeSettingsRepository:
+    def __init__(self, db: SqlDatabase) -> None:
+        self.db = db
+
+    def get(self, key: str) -> dict[str, object]:
+        row = self.db.execute(
+            "SELECT payload FROM runtime_settings WHERE key = ?",
+            (key,),
+            fetch="one",
+        )
+        if row is None:
+            return {}
+        payload = row["payload"] if hasattr(row, "keys") else row[0]
+        return json.loads(payload)
+
+    def set(self, key: str, payload: dict[str, object]) -> None:
+        self.db.execute("DELETE FROM runtime_settings WHERE key = ?", (key,))
+        self.db.execute(
+            "INSERT INTO runtime_settings (key, payload) VALUES (?, ?)",
+            (key, json.dumps(payload, ensure_ascii=False, indent=2)),
+        )

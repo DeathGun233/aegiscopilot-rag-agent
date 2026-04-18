@@ -488,3 +488,82 @@ def test_sql_persistence_survives_container_reset(tmp_path: Path) -> None:
         setattr(settings, key, value)
     ensure_storage_dirs()
     reset_container()
+
+
+def test_sql_runtime_settings_survive_container_reset(tmp_path: Path) -> None:
+    original_settings = {
+        "storage_dir": settings.storage_dir,
+        "reports_dir": settings.reports_dir,
+        "llm_provider": settings.llm_provider,
+        "llm_base_url": settings.llm_base_url,
+        "llm_api_key": settings.llm_api_key,
+        "embedding_provider": settings.embedding_provider,
+        "embedding_base_url": settings.embedding_base_url,
+        "embedding_api_key": settings.embedding_api_key,
+        "database_url": settings.database_url,
+    }
+
+    settings.storage_dir = tmp_path / "storage"
+    settings.reports_dir = settings.storage_dir / "reports"
+    settings.llm_provider = "mock"
+    settings.llm_base_url = ""
+    settings.llm_api_key = ""
+    settings.embedding_provider = "disabled"
+    settings.embedding_base_url = ""
+    settings.embedding_api_key = ""
+    settings.database_url = f"sqlite:///{(tmp_path / 'runtime.db').as_posix()}"
+    ensure_storage_dirs()
+    reset_container()
+
+    app_module = import_module("app.main")
+    with TestClient(app_module.app) as first_client:
+        headers = _login_as_admin(first_client)
+
+        select_response = first_client.post(
+            "/models/select",
+            json={"model_id": "qwen-plus"},
+            headers=headers,
+        )
+        assert select_response.status_code == 200
+
+        retrieval_response = first_client.post(
+            "/retrieval/settings",
+            json={
+                "top_k": 7,
+                "candidate_k": 15,
+                "keyword_weight": 0.5,
+                "semantic_weight": 0.5,
+                "rerank_weight": 0.4,
+                "min_score": 0.12,
+            },
+            headers=headers,
+        )
+        assert retrieval_response.status_code == 200
+
+    runtime_model_path = settings.storage_dir / "runtime_model.json"
+    runtime_retrieval_path = settings.storage_dir / "runtime_retrieval.json"
+    if runtime_model_path.exists():
+        runtime_model_path.unlink()
+    if runtime_retrieval_path.exists():
+        runtime_retrieval_path.unlink()
+
+    reset_container()
+
+    with TestClient(app_module.app) as second_client:
+        headers = _login_as_admin(second_client)
+
+        catalog_response = second_client.get("/models", headers=headers)
+        assert catalog_response.status_code == 200
+        assert catalog_response.json()["catalog"]["active_model"] == "qwen-plus"
+
+        settings_response = second_client.get("/retrieval/settings", headers=headers)
+        assert settings_response.status_code == 200
+        payload = settings_response.json()["settings"]
+        assert payload["top_k"] == 7
+        assert payload["candidate_k"] == 15
+        assert payload["min_score"] == pytest.approx(0.12)
+
+    for key, value in original_settings.items():
+        setattr(settings, key, value)
+    ensure_storage_dirs()
+    reset_container()

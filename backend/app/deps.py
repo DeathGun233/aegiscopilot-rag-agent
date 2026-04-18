@@ -21,6 +21,7 @@ from .sql_repositories import (
     SqlDatabase,
     SqlDocumentRepository,
     SqlDocumentTaskRepository,
+    SqlRuntimeSettingsRepository,
     SqlSessionRepository,
     SqlTaskRepository,
     SqlUserRepository,
@@ -45,6 +46,7 @@ class Container:
         storage = Path(settings.storage_dir)
         if settings.database_url:
             database = SqlDatabase(settings.database_url)
+            runtime_settings = SqlRuntimeSettingsRepository(database)
             self.conversations = SqlConversationRepository(database)
             self.documents = SqlDocumentRepository(database)
             self.document_tasks = SqlDocumentTaskRepository(database)
@@ -55,6 +57,14 @@ class Container:
                 else SessionRepository(None)
             )
             self.tasks = SqlTaskRepository(database)
+            self.runtime_retrieval_service = RuntimeRetrievalService(
+                storage / "runtime_retrieval.json",
+                runtime_store=runtime_settings,
+            )
+            self.runtime_model_service = RuntimeModelService(
+                storage / "runtime_model.json",
+                runtime_store=runtime_settings,
+            )
         else:
             self.conversations = ConversationRepository(JsonStore(storage / "conversations.json"))
             self.documents = DocumentRepository(
@@ -66,7 +76,8 @@ class Container:
             session_store = JsonStore(storage / "sessions.json") if settings.persist_auth_sessions else None
             self.sessions = SessionRepository(session_store)
             self.tasks = TaskRepository(JsonStore(storage / "tasks.json"))
-        self.runtime_retrieval_service = RuntimeRetrievalService(storage / "runtime_retrieval.json")
+            self.runtime_retrieval_service = RuntimeRetrievalService(storage / "runtime_retrieval.json")
+            self.runtime_model_service = RuntimeModelService(storage / "runtime_model.json")
         self.embedding_service = EmbeddingService()
         self.document_service = DocumentService(self.documents, self.document_tasks, self.embedding_service)
         self.extraction_service = ExtractionService()
@@ -77,7 +88,6 @@ class Container:
         )
         self.query_understanding_service = QueryUnderstandingService()
         self.tool_service = ToolService(self.retrieval_service)
-        self.runtime_model_service = RuntimeModelService(storage / "runtime_model.json")
         self.user_service = UserService(self.users)
         self.auth_service = AuthService(self.users, self.sessions)
         self.generation_service = GenerationService(self.runtime_model_service)
