@@ -24,6 +24,7 @@ def client(tmp_path: Path):
         "embedding_provider": settings.embedding_provider,
         "embedding_base_url": settings.embedding_base_url,
         "embedding_api_key": settings.embedding_api_key,
+        "database_url": settings.database_url,
     }
 
     settings.storage_dir = tmp_path / "storage"
@@ -34,6 +35,7 @@ def client(tmp_path: Path):
     settings.embedding_provider = "disabled"
     settings.embedding_base_url = ""
     settings.embedding_api_key = ""
+    settings.database_url = ""
     ensure_storage_dirs()
     reset_container()
 
@@ -414,3 +416,75 @@ def test_conversation_is_user_scoped(client: TestClient) -> None:
 
     member_detail_response = client.get(f"/conversations/{conversation_id}", headers=member_headers)
     assert member_detail_response.status_code == 404
+
+
+def test_sql_persistence_survives_container_reset(tmp_path: Path) -> None:
+    original_settings = {
+        "storage_dir": settings.storage_dir,
+        "reports_dir": settings.reports_dir,
+        "llm_provider": settings.llm_provider,
+        "llm_base_url": settings.llm_base_url,
+        "llm_api_key": settings.llm_api_key,
+        "embedding_provider": settings.embedding_provider,
+        "embedding_base_url": settings.embedding_base_url,
+        "embedding_api_key": settings.embedding_api_key,
+        "database_url": getattr(settings, "database_url", ""),
+    }
+
+    settings.storage_dir = tmp_path / "storage"
+    settings.reports_dir = settings.storage_dir / "reports"
+    settings.llm_provider = "mock"
+    settings.llm_base_url = ""
+    settings.llm_api_key = ""
+    settings.embedding_provider = "disabled"
+    settings.embedding_base_url = ""
+    settings.embedding_api_key = ""
+    settings.database_url = f"sqlite:///{(tmp_path / 'app.db').as_posix()}"
+    ensure_storage_dirs()
+    reset_container()
+
+    app_module = import_module("app.main")
+    with TestClient(app_module.app) as first_client:
+        headers = _login_as_admin(first_client)
+        create_response = first_client.post(
+            "/documents",
+            json={
+                "title": "SQL Persistence Policy",
+                "content": "This record should survive container reset when SQL storage is enabled.",
+                "source_type": "text",
+                "department": "ops",
+                "version": "v1",
+                "tags": ["sql"],
+            },
+            headers=headers,
+        )
+        assert create_response.status_code == 200
+        created_id = create_response.json()["document"]["id"]
+
+        convo_response = first_client.post(
+            "/conversations",
+            json={"title": "SQL Backed Conversation"},
+            headers=headers,
+        )
+        assert convo_response.status_code == 200
+        created_conversation_id = convo_response.json()["conversation"]["id"]
+
+    reset_container()
+
+    with TestClient(app_module.app) as second_client:
+        headers = _login_as_admin(second_client)
+
+        list_response = second_client.get("/documents", headers=headers)
+        assert list_response.status_code == 200
+        document_ids = [item["id"] for item in list_response.json()["documents"]]
+        assert created_id in document_ids
+
+        conversations_response = second_client.get("/conversations", headers=headers)
+        assert conversations_response.status_code == 200
+        conversation_ids = [item["id"] for item in conversations_response.json()["conversations"]]
+        assert created_conversation_id in conversation_ids
+
+    for key, value in original_settings.items():
+        setattr(settings, key, value)
+    ensure_storage_dirs()
+    reset_container()

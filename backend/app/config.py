@@ -27,6 +27,7 @@ def _pick_embedding_api_key() -> str:
 class Settings(BaseModel):
     app_name: str = "AegisCopilot API"
     app_version: str = "0.1.0"
+    database_url: str = os.getenv("AEGIS_DATABASE_URL", "")
     storage_dir: Path = Field(default=Path(__file__).resolve().parents[2] / "backend" / "storage")
     reports_dir: Path = Field(default=Path(__file__).resolve().parents[2] / "backend" / "storage" / "reports")
     max_history_messages: int = 8

@@ -16,6 +16,15 @@ from .repositories import (
     TaskRepository,
     UserRepository,
 )
+from .sql_repositories import (
+    SqlConversationRepository,
+    SqlDatabase,
+    SqlDocumentRepository,
+    SqlDocumentTaskRepository,
+    SqlSessionRepository,
+    SqlTaskRepository,
+    SqlUserRepository,
+)
 from .services.agent import AgentService
 from .services.auth import AuthService
 from .services.documents import DocumentService
@@ -34,16 +43,29 @@ from .services.users import UserService
 class Container:
     def __init__(self) -> None:
         storage = Path(settings.storage_dir)
-        self.conversations = ConversationRepository(JsonStore(storage / "conversations.json"))
-        self.documents = DocumentRepository(
-            JsonStore(storage / "documents.json"),
-            JsonStore(storage / "chunks.json"),
-        )
-        self.document_tasks = DocumentTaskRepository(JsonStore(storage / "document_tasks.json"))
-        self.users = UserRepository(JsonStore(storage / "users.json"))
-        session_store = JsonStore(storage / "sessions.json") if settings.persist_auth_sessions else None
-        self.sessions = SessionRepository(session_store)
-        self.tasks = TaskRepository(JsonStore(storage / "tasks.json"))
+        if settings.database_url:
+            database = SqlDatabase(settings.database_url)
+            self.conversations = SqlConversationRepository(database)
+            self.documents = SqlDocumentRepository(database)
+            self.document_tasks = SqlDocumentTaskRepository(database)
+            self.users = SqlUserRepository(database)
+            self.sessions = (
+                SqlSessionRepository(database)
+                if settings.persist_auth_sessions
+                else SessionRepository(None)
+            )
+            self.tasks = SqlTaskRepository(database)
+        else:
+            self.conversations = ConversationRepository(JsonStore(storage / "conversations.json"))
+            self.documents = DocumentRepository(
+                JsonStore(storage / "documents.json"),
+                JsonStore(storage / "chunks.json"),
+            )
+            self.document_tasks = DocumentTaskRepository(JsonStore(storage / "document_tasks.json"))
+            self.users = UserRepository(JsonStore(storage / "users.json"))
+            session_store = JsonStore(storage / "sessions.json") if settings.persist_auth_sessions else None
+            self.sessions = SessionRepository(session_store)
+            self.tasks = TaskRepository(JsonStore(storage / "tasks.json"))
         self.runtime_retrieval_service = RuntimeRetrievalService(storage / "runtime_retrieval.json")
         self.embedding_service = EmbeddingService()
         self.document_service = DocumentService(self.documents, self.document_tasks, self.embedding_service)

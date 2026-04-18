@@ -1,12 +1,27 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aegiscopilot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   backend:
     build:
       context: ./backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      AEGIS_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/aegiscopilot
     ports:
       - "8000:8000"
+    depends_on:
+      - postgres
 
   frontend:
     build:
@@ -15,3 +30,6 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+
+volumes:
+  postgres-data:
