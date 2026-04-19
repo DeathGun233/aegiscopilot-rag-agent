@@ -71,6 +71,154 @@ def test_migration_script_moves_runtime_settings_into_sqlite(tmp_path: Path) -> 
     assert retrieval_service.get_settings().candidate_k == 16
 
 
+def test_migration_dry_run_writes_report_without_touching_database(tmp_path: Path) -> None:
+    module = _load_module()
+    from app.models import Conversation, Message, MessageRole, utc_now
+
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    now = utc_now()
+    conversation = Conversation(
+        id="conv-dry-run",
+        owner_id="admin",
+        title="Dry Run Conversation",
+        messages=[Message(id="msg-dry-run", role=MessageRole.user, content="hello", created_at=now)],
+        created_at=now,
+        updated_at=now,
+    )
+    _dump_models(storage_dir / "conversations.json", [conversation])
+
+    database_path = tmp_path / "dry-run.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    report_path = tmp_path / "migration-report.json"
+
+    assert module.main(
+        [
+            "--storage-dir",
+            str(storage_dir),
+            "--database-url",
+            database_url,
+            "--dry-run",
+            "--report-path",
+            str(report_path),
+        ]
+    ) == 0
+
+    assert not database_path.exists()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["dry_run"] is True
+    assert report["counts"]["conversations"] == 1
+    assert report["counts"]["documents"] == 0
+
+
+def test_migration_writes_report_and_rollback_sql(tmp_path: Path) -> None:
+    module = _load_module()
+    from app.models import (
+        Chunk,
+        Conversation,
+        Document,
+        DocumentIndexState,
+        Message,
+        MessageRole,
+        User,
+        UserRole,
+        utc_now,
+    )
+
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    now = utc_now()
+    conversation = Conversation(
+        id="conv-report",
+        owner_id="admin",
+        title="Report Conversation",
+        messages=[Message(id="msg-report", role=MessageRole.user, content="hello", created_at=now)],
+        created_at=now,
+        updated_at=now,
+    )
+    document = Document(
+        id="doc-report",
+        title="Report Document",
+        source_type="text",
+        department="ops",
+        version="v1",
+        content="Report content",
+        tags=["report"],
+        created_at=now,
+        updated_at=now,
+        indexed_at=now,
+        index_state=DocumentIndexState.indexed,
+        embedding_version="test-v1",
+    )
+    chunk = Chunk(
+        id="chunk-report",
+        document_id=document.id,
+        document_title=document.title,
+        text=document.content,
+        chunk_index=0,
+        tokens=["report"],
+        embedding=[0.1],
+        embedding_version="test-v1",
+        metadata={"department": "ops"},
+    )
+    user = User(id="auditor", name="Auditor", role=UserRole.member, created_at=now)
+
+    _dump_models(storage_dir / "conversations.json", [conversation])
+    _dump_models(storage_dir / "documents.json", [document])
+    _dump_models(storage_dir / "chunks.json", [chunk])
+    _dump_models(storage_dir / "users.json", [user])
+    (storage_dir / "runtime_model.json").write_text(
+        json.dumps({"active_model": "qwen-plus"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    database_url = f"sqlite:///{(tmp_path / 'reported.db').as_posix()}"
+    report_path = tmp_path / "migration-report.json"
+    rollback_sql_path = tmp_path / "rollback.sql"
+
+    assert module.main(
+        [
+            "--storage-dir",
+            str(storage_dir),
+            "--database-url",
+            database_url,
+            "--report-path",
+            str(report_path),
+            "--rollback-sql-path",
+            str(rollback_sql_path),
+        ]
+    ) == 0
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["dry_run"] is False
+    assert report["counts"]["conversations"] == 1
+    assert report["counts"]["documents"] == 1
+    assert report["counts"]["chunks"] == 1
+    assert report["counts"]["runtime_model"] == 1
+
+    rollback_sql = rollback_sql_path.read_text(encoding="utf-8")
+    assert "DELETE FROM conversations WHERE id IN ('conv-report');" in rollback_sql
+    assert "DELETE FROM chunks WHERE id IN ('chunk-report');" in rollback_sql
+    assert "DELETE FROM runtime_settings WHERE key IN ('runtime_model');" in rollback_sql
+
+
+def test_alembic_initial_migration_covers_sql_persistence_tables() -> None:
+    migration_path = ROOT / "backend" / "alembic" / "versions" / "0001_initial_sql_persistence.py"
+    content = migration_path.read_text(encoding="utf-8")
+
+    for table_name in (
+        "conversations",
+        "documents",
+        "chunks",
+        "document_tasks",
+        "tasks",
+        "users",
+        "sessions",
+        "runtime_settings",
+    ):
+        assert table_name in content
+
+
 def test_migration_script_moves_core_json_records_into_sqlite(tmp_path: Path) -> None:
     module = _load_module()
     from app.models import (
