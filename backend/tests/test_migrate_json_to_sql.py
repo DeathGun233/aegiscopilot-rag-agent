@@ -219,6 +219,12 @@ def test_alembic_initial_migration_covers_sql_persistence_tables() -> None:
         assert table_name in content
 
 
+def test_sqlite_url_preserves_posix_absolute_paths() -> None:
+    from app.sql_repositories import SqlDatabase
+
+    assert SqlDatabase._resolve_sqlite_path("sqlite:////tmp/aegiscopilot.db") == "/tmp/aegiscopilot.db"
+
+
 def test_migration_script_moves_core_json_records_into_sqlite(tmp_path: Path) -> None:
     module = _load_module()
     from app.models import (

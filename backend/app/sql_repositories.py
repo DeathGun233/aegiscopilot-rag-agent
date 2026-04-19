@@ -49,6 +49,10 @@ class SqlDatabase:
         parsed = urlparse(url)
         if parsed.netloc:
             return f"//{parsed.netloc}{parsed.path}"
+        if parsed.path.startswith("//"):
+            return parsed.path[1:]
+        if len(parsed.path) >= 3 and parsed.path[0] == "/" and parsed.path[2] == ":":
+            return parsed.path[1:]
         return parsed.path.lstrip("/")
 
     def _connect(self):
