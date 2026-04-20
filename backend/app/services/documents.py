@@ -13,6 +13,7 @@ from ..models import (
     utc_now,
 )
 from ..repositories import DocumentRepository, DocumentTaskRepository
+from ..vector_store import VectorStore
 from .embeddings import EmbeddingService
 from .text import normalize_text, split_into_chunks, tokenize
 
@@ -22,10 +23,12 @@ class DocumentService:
         self,
         repo: DocumentRepository,
         task_repo: DocumentTaskRepository,
+        vector_store: VectorStore,
         embeddings: EmbeddingService,
     ) -> None:
         self.repo = repo
         self.task_repo = task_repo
+        self.vector_store = vector_store
         self.embeddings = embeddings
         self._task_queue: Queue[str] = Queue()
         self._active_task_ids: set[str] = set()
@@ -106,6 +109,7 @@ class DocumentService:
         return self.repo.get_document(document_id)
 
     def delete_document(self, document_id: str) -> bool:
+        self.vector_store.delete_document(document_id)
         return self.repo.delete_document(document_id)
 
     def get_document_task(self, task_id: str) -> DocumentTask | None:
@@ -140,7 +144,7 @@ class DocumentService:
             raise ValueError("mode 仅支持 all、missing_embeddings 或 outdated_embeddings")
 
         documents = self.repo.list_documents()
-        chunk_stats = self.repo.get_chunk_stats()
+        chunk_stats = self.vector_store.get_chunk_stats()
         selected: list[Document] = []
         skipped_documents = 0
         current_embedding_version = self.get_current_embedding_version()
@@ -201,7 +205,7 @@ class DocumentService:
         document.embedding_version = self._resolved_document_embedding_version(chunks)
         document.last_index_error = ""
         self.repo.upsert_document(document)
-        return self.repo.replace_chunks(document.id, chunks)
+        return self.vector_store.replace_document_chunks(document.id, chunks)
 
     def document_requires_reindex(
         self,
@@ -281,7 +285,7 @@ class DocumentService:
         try:
             chunks = self._build_chunks(document)
             self._update_task(task, progress=78, message="正在写入索引和向量")
-            chunks_created = self.repo.replace_chunks(document.id, chunks)
+            chunks_created = self.vector_store.replace_document_chunks(document.id, chunks)
         except Exception as exc:
             self._mark_document_failed(document, task, str(exc))
             raise

@@ -7,6 +7,7 @@ from fastapi import Header, HTTPException, status
 
 from .config import settings
 from .models import User
+from .vector_store import LocalVectorStore
 from .repositories import (
     ConversationRepository,
     DocumentRepository,
@@ -78,11 +79,18 @@ class Container:
             self.tasks = TaskRepository(JsonStore(storage / "tasks.json"))
             self.runtime_retrieval_service = RuntimeRetrievalService(storage / "runtime_retrieval.json")
             self.runtime_model_service = RuntimeModelService(storage / "runtime_model.json")
+        self.vector_store = LocalVectorStore(self.documents)
         self.embedding_service = EmbeddingService()
-        self.document_service = DocumentService(self.documents, self.document_tasks, self.embedding_service)
+        self.document_service = DocumentService(
+            self.documents,
+            self.document_tasks,
+            self.vector_store,
+            self.embedding_service,
+        )
         self.extraction_service = ExtractionService()
         self.retrieval_service = RetrievalService(
             self.documents,
+            self.vector_store,
             self.runtime_retrieval_service,
             self.embedding_service,
         )
@@ -101,6 +109,7 @@ class Container:
         self.system_service = SystemService(
             self.conversations,
             self.documents,
+            self.vector_store,
             self.tasks,
             self.runtime_model_service,
             self.runtime_retrieval_service,

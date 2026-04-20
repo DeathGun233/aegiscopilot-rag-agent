@@ -157,7 +157,7 @@ def _build_document_summary(document: Document, chunk_count: int, task: Document
     preview = normalize_text(document.content)[:160]
     container = get_container()
     current_embedding_version = container.document_service.get_current_embedding_version()
-    embedded_chunk_count = container.documents.count_embedded_chunks_for_document(document.id)
+    embedded_chunk_count = container.vector_store.count_embedded_chunks_for_document(document.id)
     missing_embedding_chunks = max(chunk_count - embedded_chunk_count, 0)
     embedding_stale = (
         container.embedding_service.is_enabled()
@@ -275,7 +275,7 @@ def _ensure_task_access(task: AgentTask, current_user: User) -> None:
 def _document_counts() -> dict[str, int]:
     container = get_container()
     counts: dict[str, int] = {}
-    for chunk in container.documents.list_chunks():
+    for chunk in container.vector_store.list_chunks():
         counts[chunk.document_id] = counts.get(chunk.document_id, 0) + 1
     return counts
 
@@ -521,7 +521,7 @@ def get_document(
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
 
-    chunk_count = container.documents.count_chunks_for_document(document_id)
+    chunk_count = container.vector_store.count_chunks_for_document(document_id)
     latest_task = container.document_tasks.get(document.last_task_id) if document.last_task_id else None
     summary = _build_document_summary(document, chunk_count, latest_task)
     chunks = [
@@ -534,7 +534,7 @@ def get_document(
             "token_count": len(chunk.tokens),
             "metadata": chunk.metadata,
         }
-        for chunk in container.documents.list_chunks_for_document(document_id)
+        for chunk in container.vector_store.list_chunks_for_document(document_id)
     ]
     recent_tasks = [
         _build_task_summary(task)
@@ -559,7 +559,7 @@ def get_document_status(
     task = container.document_tasks.get(document.last_task_id) if document.last_task_id else None
     summary = _build_document_summary(
         document,
-        container.documents.count_chunks_for_document(document_id),
+        container.vector_store.count_chunks_for_document(document_id),
         task,
     )
     return DocumentStatusResponse(document=summary, task=_build_task_summary(task))
@@ -613,7 +613,7 @@ async def upload_document(
         version="v1",
         tags=[],
     )
-    summary = _build_document_summary(document, container.documents.count_chunks_for_document(document.id), task)
+    summary = _build_document_summary(document, container.vector_store.count_chunks_for_document(document.id), task)
     return DocumentUploadResponse(
         document=summary,
         task=_build_task_summary(task),
@@ -645,7 +645,7 @@ def reindex_document(
         document, task, chunks_created = container.document_service.reindex_document(document_id, current_user.id)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在") from exc
-    summary = _build_document_summary(document, container.documents.count_chunks_for_document(document.id), task)
+    summary = _build_document_summary(document, container.vector_store.count_chunks_for_document(document.id), task)
     return ReindexResponse(
         document=summary,
         task=_build_task_summary(task),

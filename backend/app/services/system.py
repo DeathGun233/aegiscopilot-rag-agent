@@ -3,6 +3,7 @@ from __future__ import annotations
 from ..config import settings
 from ..models import SystemStats, User, UserRole
 from ..repositories import ConversationRepository, DocumentRepository, TaskRepository
+from ..vector_store import VectorStore
 from .embeddings import EmbeddingService
 from .runtime_models import RuntimeModelService
 from .runtime_retrieval import RuntimeRetrievalService
@@ -13,6 +14,7 @@ class SystemService:
         self,
         conversations: ConversationRepository,
         documents: DocumentRepository,
+        vector_store: VectorStore,
         tasks: TaskRepository,
         runtime_models: RuntimeModelService,
         runtime_retrieval: RuntimeRetrievalService,
@@ -20,6 +22,7 @@ class SystemService:
     ) -> None:
         self.conversations = conversations
         self.documents = documents
+        self.vector_store = vector_store
         self.tasks = tasks
         self.runtime_models = runtime_models
         self.runtime_retrieval = runtime_retrieval
@@ -30,7 +33,7 @@ class SystemService:
         embedding_runtime = self.embeddings.get_runtime()
         current_embedding_version = self.embeddings.get_version()
         retrieval = self.runtime_retrieval.get_settings()
-        chunk_stats = self.documents.get_chunk_stats()
+        chunk_stats = self.vector_store.get_chunk_stats()
         conversation_count = (
             len(self.conversations.list())
             if user.role == UserRole.admin
@@ -57,7 +60,7 @@ class SystemService:
                 stale_embedding_documents += 1
         return SystemStats(
             documents=len(self.documents.list_documents()),
-            indexed_chunks=len(self.documents.list_chunks()),
+            indexed_chunks=len(self.vector_store.list_chunks()),
             conversations=conversation_count,
             tasks=task_count,
             retrieval_top_k=retrieval.top_k,
@@ -71,7 +74,7 @@ class SystemService:
             current_embedding_version=current_embedding_version,
             embedding_dimensions=int(embedding_runtime["dimensions"]),
             embedded_documents=embedded_documents,
-            embedded_chunks=sum(1 for chunk in self.documents.list_chunks() if chunk.embedding),
+            embedded_chunks=sum(1 for chunk in self.vector_store.list_chunks() if chunk.embedding),
             pending_embedding_documents=pending_embedding_documents,
             stale_embedding_documents=stale_embedding_documents,
             api_key_configured=bool(runtime["api_key_configured"]),

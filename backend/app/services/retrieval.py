@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from ..models import RetrievalResult
 from ..repositories import DocumentRepository
+from ..vector_store import VectorStore
 from .embeddings import EmbeddingService
 from .runtime_retrieval import RuntimeRetrievalService
 from .text import normalize_text, tokenize
@@ -23,10 +24,12 @@ class RetrievalService:
     def __init__(
         self,
         repo: DocumentRepository,
+        vector_store: VectorStore,
         runtime_retrieval: RuntimeRetrievalService,
         embeddings: EmbeddingService,
     ) -> None:
         self.repo = repo
+        self.vector_store = vector_store
         self.runtime_retrieval = runtime_retrieval
         self.embeddings = embeddings
 
@@ -82,7 +85,7 @@ class RetrievalService:
         )
 
         candidates: list[dict[str, object]] = []
-        for chunk in self.repo.list_chunks():
+        for chunk in self.vector_store.search_candidates(normalized_query, query_embedding, limit):
             chunk_text = normalize_text(chunk.text).lower()
             chunk_counter = Counter(chunk.tokens)
             overlap = sum(min(query_counter[token], chunk_counter[token]) for token in query_counter)
