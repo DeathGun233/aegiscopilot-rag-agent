@@ -16,6 +16,7 @@ from .models import (
     RetrievalResult,
     RetrievalSettings,
     SystemStats,
+    SystemStatus,
     User,
 )
 
@@ -243,3 +244,7 @@ class AgentTaskDetailResponse(BaseModel):
 
 class SystemStatsResponse(BaseModel):
     stats: SystemStats
+
+
+class SystemStatusResponse(BaseModel):
+    status: SystemStatus

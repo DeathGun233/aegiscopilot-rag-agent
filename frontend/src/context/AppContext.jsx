@@ -19,6 +19,7 @@ function resetSessionState(setters) {
   setters.setCurrentUser(null);
   setters.setUsers([]);
   setters.setStats(null);
+  setters.setSystemStatus(null);
   setters.setModelCatalog(null);
   setters.setDocuments([]);
   setters.setConversations([]);
@@ -33,6 +34,7 @@ export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
+  const [systemStatus, setSystemStatus] = useState(null);
   const [modelCatalog, setModelCatalog] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -65,6 +67,16 @@ export function AppProvider({ children }) {
     return data.stats;
   }
 
+  async function refreshSystemStatus() {
+    if (!isAdmin) {
+      setSystemStatus(null);
+      return null;
+    }
+    const data = await fetchJson("/system/status");
+    setSystemStatus(data.status);
+    return data.status;
+  }
+
   async function refreshUsers() {
     if (!isAdmin) {
       setUsers([]);
@@ -89,10 +101,12 @@ export function AppProvider({ children }) {
     setStats(statsData);
 
     if (meData.user.role === "admin") {
-      const usersData = await fetchJson("/users");
+      const [usersData, statusData] = await Promise.all([fetchJson("/users"), fetchJson("/system/status")]);
       setUsers(usersData.users);
+      setSystemStatus(statusData.status);
     } else {
       setUsers([]);
+      setSystemStatus(null);
     }
 
     return {
@@ -114,6 +128,7 @@ export function AppProvider({ children }) {
           setCurrentUser,
           setUsers,
           setStats,
+          setSystemStatus,
           setModelCatalog,
           setDocuments,
           setConversations,
@@ -138,6 +153,7 @@ export function AppProvider({ children }) {
             setCurrentUser,
             setUsers,
             setStats,
+            setSystemStatus,
             setModelCatalog,
             setDocuments,
             setConversations,
@@ -191,6 +207,7 @@ export function AppProvider({ children }) {
         setCurrentUser,
         setUsers,
         setStats,
+        setSystemStatus,
         setModelCatalog,
         setDocuments,
         setConversations,
@@ -332,6 +349,7 @@ export function AppProvider({ children }) {
         fetchDocument,
         fetchDocumentStatus,
         fetchRetrievalSettings,
+        refreshSystemStatus,
         fetchAgentTask,
         fetchAgentTasks,
         fetchUploadTask,
@@ -353,6 +371,7 @@ export function AppProvider({ children }) {
         selectModel,
         setGlobalNotice,
         stats,
+        systemStatus,
         updateRetrievalSettings,
         uploadDocumentFile,
         users,

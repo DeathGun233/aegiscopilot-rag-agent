@@ -242,3 +242,17 @@ class SystemStats(BaseModel):
     stale_embedding_documents: int = 0
     api_key_configured: bool = False
     embedding_api_key_configured: bool = False
+
+
+class SystemCheck(BaseModel):
+    status: str
+    message: str = ""
+    provider: str = ""
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class SystemStatus(BaseModel):
+    status: str
+    ready: bool
+    providers: dict[str, SystemCheck]
+    document_tasks: dict[str, int]

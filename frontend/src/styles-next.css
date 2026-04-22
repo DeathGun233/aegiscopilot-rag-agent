@@ -755,6 +755,7 @@ a {
 }
 
 .status-dot.live,
+.status-pill.live,
 .state-badge.indexed {
   background: rgba(34, 197, 94, 0.12);
   color: #166534;
@@ -766,6 +767,11 @@ a {
 }
 
 .state-badge.failed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.status-pill.failed {
   background: rgba(239, 68, 68, 0.12);
   color: #b91c1c;
 }

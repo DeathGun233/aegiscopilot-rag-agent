@@ -45,8 +45,10 @@ from .services.users import UserService
 class Container:
     def __init__(self) -> None:
         storage = Path(settings.storage_dir)
+        self.database = None
         if settings.database_url:
             database = SqlDatabase(settings.database_url)
+            self.database = database
             runtime_settings = SqlRuntimeSettingsRepository(database)
             self.conversations = SqlConversationRepository(database)
             self.documents = SqlDocumentRepository(database)
@@ -109,11 +111,14 @@ class Container:
         self.system_service = SystemService(
             self.conversations,
             self.documents,
+            self.document_tasks,
             self.vector_store,
             self.tasks,
             self.runtime_model_service,
             self.runtime_retrieval_service,
             self.embedding_service,
+            database=self.database,
+            active_document_tasks=self.document_service.get_active_task_count,
         )
 
     def _build_vector_store(self) -> VectorStore:

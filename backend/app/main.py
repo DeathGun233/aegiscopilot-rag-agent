@@ -35,6 +35,7 @@ from .api_schemas import (
     RetrievalSettingsResponse,
     RetrievalSettingsUpdateRequest,
     SystemStatsResponse,
+    SystemStatusResponse,
     QueryUnderstandingPreview,
     UserListResponse,
 )
@@ -373,6 +374,13 @@ def auth_me(current_user: User = Depends(get_current_user)) -> CurrentUserRespon
 def get_system_stats(current_user: User = Depends(get_current_user)) -> SystemStatsResponse:
     container = get_container()
     return SystemStatsResponse(stats=container.system_service.get_stats(current_user))
+
+
+@app.get("/system/status", response_model=SystemStatusResponse)
+def get_system_status(current_user: User = Depends(get_current_user)) -> SystemStatusResponse:
+    _require_admin(current_user)
+    container = get_container()
+    return SystemStatusResponse(status=container.system_service.get_status())
 
 
 @app.get("/users", response_model=UserListResponse)

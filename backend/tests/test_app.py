@@ -136,6 +136,35 @@ def test_health(client: TestClient) -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_system_status_reports_readiness_and_providers(client: TestClient) -> None:
+    headers = _login_as_admin(client)
+
+    response = client.get("/system/status", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()["status"]
+    assert payload["status"] == "ready"
+    assert payload["ready"] is True
+    assert payload["providers"]["database"]["provider"] == "json"
+    assert payload["providers"]["database"]["status"] == "ok"
+    assert payload["providers"]["vector"]["provider"] == "local"
+    assert payload["providers"]["vector"]["status"] == "ok"
+    assert payload["providers"]["embedding"]["provider"] == "disabled"
+    assert payload["providers"]["llm"]["provider"] == "mock"
+    assert payload["document_tasks"]["queued"] == 0
+    assert payload["document_tasks"]["running"] == 0
+    assert payload["document_tasks"]["failed"] == 0
+    assert payload["document_tasks"]["active"] == 0
+
+
+def test_system_status_requires_admin(client: TestClient) -> None:
+    headers = _login_as_member(client)
+
+    response = client.get("/system/status", headers=headers)
+
+    assert response.status_code == 403
+
+
 def test_document_and_chat_flow(client: TestClient) -> None:
     headers = _login_as_admin(client)
 

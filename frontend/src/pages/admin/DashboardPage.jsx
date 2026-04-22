@@ -8,6 +8,19 @@ function formatPercent(value) {
   return `${Math.round((Number(value) || 0) * 100)}%`;
 }
 
+function statusLabel(status) {
+  if (status === "ok") {
+    return "正常";
+  }
+  if (status === "warning") {
+    return "需关注";
+  }
+  if (status === "error") {
+    return "异常";
+  }
+  return status || "-";
+}
+
 export function DashboardPage() {
   const {
     bulkReindexDocuments,
@@ -16,8 +29,10 @@ export function DashboardPage() {
     fetchRetrievalSettings,
     modelCatalog,
     previewRetrieval,
+    refreshSystemStatus,
     setGlobalNotice,
     stats,
+    systemStatus,
     updateRetrievalSettings,
     users,
   } = useAppContext();
@@ -38,6 +53,7 @@ export function DashboardPage() {
   const [previewUnderstanding, setPreviewUnderstanding] = useState(null);
   const [bulkLoading, setBulkLoading] = useState("");
   const [bulkResult, setBulkResult] = useState(null);
+  const [statusRefreshing, setStatusRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +93,17 @@ export function DashboardPage() {
 
   function updateForm(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handleRefreshStatus() {
+    setStatusRefreshing(true);
+    try {
+      await refreshSystemStatus();
+    } catch (error) {
+      setGlobalNotice(error.message || "系统状态刷新失败");
+    } finally {
+      setStatusRefreshing(false);
+    }
   }
 
   async function handleSaveSettings(event) {
@@ -193,6 +220,85 @@ export function DashboardPage() {
           <span>向量维度</span>
           <strong>{stats?.embedding_dimensions || "-"}</strong>
           <small>当前向量模型输出的向量维度。</small>
+        </article>
+      </section>
+
+      <section className="admin-grid two-columns">
+        <article className="panel-card">
+          <div className="panel-head">
+            <div>
+              <span className="panel-kicker">系统状态</span>
+              <h3>Readiness</h3>
+            </div>
+            <span className={`status-pill ${systemStatus?.ready ? "live" : "failed"}`}>
+              {systemStatus?.ready ? "Ready" : "Degraded"}
+            </span>
+          </div>
+          <div className="definition-list">
+            <div>
+              <span>数据库</span>
+              <strong>
+                {systemStatus?.providers?.database?.provider || "-"} /{" "}
+                {statusLabel(systemStatus?.providers?.database?.status)}
+              </strong>
+            </div>
+            <div>
+              <span>向量层</span>
+              <strong>
+                {systemStatus?.providers?.vector?.provider || "-"} / {statusLabel(systemStatus?.providers?.vector?.status)}
+              </strong>
+            </div>
+            <div>
+              <span>Embedding</span>
+              <strong>
+                {systemStatus?.providers?.embedding?.provider || "-"} /{" "}
+                {statusLabel(systemStatus?.providers?.embedding?.status)}
+              </strong>
+            </div>
+            <div>
+              <span>LLM</span>
+              <strong>
+                {systemStatus?.providers?.llm?.provider || "-"} / {statusLabel(systemStatus?.providers?.llm?.status)}
+              </strong>
+            </div>
+          </div>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={statusRefreshing}
+              onClick={handleRefreshStatus}
+            >
+              {statusRefreshing ? "刷新中..." : "刷新状态"}
+            </button>
+          </div>
+        </article>
+
+        <article className="panel-card">
+          <div className="panel-head">
+            <div>
+              <span className="panel-kicker">任务队列</span>
+              <h3>索引任务</h3>
+            </div>
+          </div>
+          <div className="definition-list">
+            <div>
+              <span>排队</span>
+              <strong>{systemStatus?.document_tasks?.queued ?? 0}</strong>
+            </div>
+            <div>
+              <span>运行中</span>
+              <strong>{systemStatus?.document_tasks?.running ?? 0}</strong>
+            </div>
+            <div>
+              <span>失败</span>
+              <strong>{systemStatus?.document_tasks?.failed ?? 0}</strong>
+            </div>
+            <div>
+              <span>活跃 worker</span>
+              <strong>{systemStatus?.document_tasks?.active ?? 0}</strong>
+            </div>
+          </div>
         </article>
       </section>
 
