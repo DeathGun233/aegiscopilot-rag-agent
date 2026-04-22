@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from ..config import settings
 from ..models import RetrievalResult, RetrievalSettings
 from ..repositories import DocumentRepository
 from ..vector_store import VectorStore
@@ -68,7 +69,8 @@ class RetrievalService:
             key=lambda item: (item.score, item.keyword_score, item.semantic_score, item.coverage_score),
             reverse=True,
         )
-        return deduped[:final_top_k]
+        expanded = self._expand_adjacent_results(deduped, final_top_k)
+        return expanded[:final_top_k]
 
     def _search_single_query(self, query: str, settings, limit: int) -> list[RetrievalResult]:
         candidates = [
@@ -202,8 +204,16 @@ class RetrievalService:
             settings.semantic_weight,
         )
 
+        candidate_chunks = self._collect_candidate_chunks(
+            normalized_query,
+            query_tokens,
+            query_embedding,
+            settings,
+            limit,
+        )
+
         candidates: list[dict[str, object]] = []
-        for chunk in self.vector_store.search_candidates(normalized_query, query_embedding, limit):
+        for chunk in candidate_chunks:
             chunk_text = normalize_text(chunk.text).lower()
             chunk_counter = Counter(chunk.tokens)
             overlap = sum(min(query_counter[token], chunk_counter[token]) for token in query_counter)
@@ -259,6 +269,53 @@ class RetrievalService:
             reverse=True,
         )
         return candidates
+
+    def _collect_candidate_chunks(
+        self,
+        normalized_query: str,
+        query_tokens: list[str],
+        query_embedding: list[float],
+        settings,
+        limit: int,
+    ) -> list:
+        vector_candidates = self.vector_store.search_candidates(normalized_query, query_embedding, limit)
+        keyword_candidates = self._keyword_candidate_chunks(normalized_query, query_tokens, settings, limit)
+
+        merged = []
+        seen_ids: set[str] = set()
+        for chunk in [*vector_candidates, *keyword_candidates]:
+            if chunk.id in seen_ids:
+                continue
+            seen_ids.add(chunk.id)
+            merged.append(chunk)
+        return merged
+
+    def _keyword_candidate_chunks(
+        self,
+        normalized_query: str,
+        query_tokens: list[str],
+        settings,
+        limit: int,
+    ) -> list:
+        query_counter = Counter(query_tokens)
+        scored_chunks: list[tuple[float, object]] = []
+        for chunk in self.vector_store.list_chunks():
+            chunk_text = normalize_text(chunk.text).lower()
+            chunk_counter = Counter(chunk.tokens)
+            overlap = sum(min(query_counter[token], chunk_counter[token]) for token in query_counter)
+            title_tokens = tokenize(chunk.document_title.lower())
+            title_overlap = sum(1 for token in set(query_tokens) if token in title_tokens)
+            exact_phrase = 1 if normalized_query and normalized_query in chunk_text else 0
+            if overlap <= 0 and title_overlap <= 0 and exact_phrase <= 0:
+                continue
+            coverage = overlap / max(len(query_counter), 1)
+            density = overlap / max(len(chunk.tokens), 1)
+            title_bonus = title_overlap / max(len(set(query_tokens)), 1)
+            score = coverage * 0.62 + density * 0.18 + title_bonus * 0.12 + exact_phrase * 0.08
+            scored_chunks.append((score, chunk))
+
+        scored_chunks.sort(key=lambda item: item[0], reverse=True)
+        return [chunk for _, chunk in scored_chunks[: max(settings.candidate_k, limit)]]
 
     def get_runtime_settings(self):
         return self.runtime_retrieval.get_settings()
@@ -363,6 +420,74 @@ class RetrievalService:
         )
         return reranked
 
+    def _expand_adjacent_results(self, results: list[RetrievalResult], limit: int) -> list[RetrievalResult]:
+        expanded: list[RetrievalResult] = []
+        seen_signatures: set[str] = set()
+
+        def add_result(item: RetrievalResult) -> None:
+            signature = self._result_signature(item)
+            if signature in seen_signatures:
+                return
+            seen_signatures.add(signature)
+            expanded.append(item)
+
+        for result in results:
+            add_result(result)
+            if len(expanded) >= limit:
+                break
+            for adjacent in self._adjacent_chunk_results(result):
+                add_result(adjacent)
+                if len(expanded) >= limit:
+                    break
+            if len(expanded) >= limit:
+                break
+
+        return expanded
+
+    def _adjacent_chunk_results(self, result: RetrievalResult) -> list[RetrievalResult]:
+        try:
+            chunks = sorted(
+                self.vector_store.list_chunks_for_document(result.document_id),
+                key=lambda item: item.chunk_index,
+            )
+        except Exception:
+            return []
+
+        by_index = {chunk.chunk_index: chunk for chunk in chunks}
+        adjacent_results: list[RetrievalResult] = []
+        for offset in (1, 2, -1):
+            chunk = by_index.get(self._chunk_index_from_result(result) + offset)
+            if chunk is None:
+                continue
+            adjacent_results.append(
+                RetrievalResult(
+                    chunk_id=chunk.id,
+                    document_id=chunk.document_id,
+                    document_title=chunk.document_title,
+                    text=chunk.text,
+                    score=round(max(result.score - 0.02 * abs(offset), settings.min_grounding_score), 4),
+                    source=f"{chunk.document_title}#chunk-{chunk.chunk_index}",
+                    display_source=f"{chunk.document_title} | 片段 {chunk.chunk_index + 1}",
+                    retrieval_method="adjacent",
+                    keyword_score=result.keyword_score,
+                    semantic_score=result.semantic_score,
+                    semantic_source=result.semantic_source,
+                    rerank_score=result.rerank_score,
+                    coverage_score=result.coverage_score,
+                    matched_query=result.matched_query,
+                    query_variant=result.query_variant,
+                    query_boost=result.query_boost,
+                )
+            )
+        return adjacent_results
+
+    @staticmethod
+    def _chunk_index_from_result(result: RetrievalResult) -> int:
+        try:
+            return int(result.source.rsplit("#chunk-", 1)[1])
+        except (IndexError, ValueError):
+            return 0
+
     @staticmethod
     def _debug_item_from_scored(item: dict[str, object], variant: QueryVariant, filter_reason: str) -> dict[str, Any]:
         chunk = item["chunk"]
@@ -415,12 +540,16 @@ class RetrievalService:
         seen_signatures: set[str] = set()
         deduped: list[RetrievalResult] = []
         for item in results:
-            signature = f"{item.document_id}:{normalize_text(item.text)[:120].lower()}"
+            signature = RetrievalService._result_signature(item)
             if signature in seen_signatures:
                 continue
             seen_signatures.add(signature)
             deduped.append(item)
         return deduped
+
+    @staticmethod
+    def _result_signature(item: RetrievalResult) -> str:
+        return normalize_text(item.text)[:180].lower()
 
     @staticmethod
     def _char_ngrams(text: str, min_n: int = 2, max_n: int = 3) -> Counter[str]:

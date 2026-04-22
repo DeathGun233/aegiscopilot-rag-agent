@@ -27,13 +27,20 @@ class RejectingDocumentRepository:
 
 
 class StaticVectorStore:
-    def __init__(self, chunks: list[Chunk]) -> None:
+    def __init__(self, chunks: list[Chunk], search_chunks: list[Chunk] | None = None) -> None:
         self.chunks = chunks
+        self.search_chunks = search_chunks
         self.calls: list[dict[str, object]] = []
 
     def search_candidates(self, query: str, query_embedding: list[float], limit: int) -> list[Chunk]:
         self.calls.append({"query": query, "query_embedding": query_embedding, "limit": limit})
+        return self.search_chunks if self.search_chunks is not None else self.chunks
+
+    def list_chunks(self) -> list[Chunk]:
         return self.chunks
+
+    def list_chunks_for_document(self, document_id: str) -> list[Chunk]:
+        return [chunk for chunk in self.chunks if chunk.document_id == document_id]
 
 
 def test_retrieval_reads_candidates_from_vector_store(tmp_path: Path) -> None:
@@ -63,6 +70,84 @@ def test_retrieval_reads_candidates_from_vector_store(tmp_path: Path) -> None:
     assert [item.chunk_id for item in results] == [chunk.id]
     assert vector_store.calls
     assert vector_store.calls[0]["query"] == "leave requests"
+
+
+def test_retrieval_adds_keyword_candidates_when_vector_search_misses_exact_section(tmp_path: Path) -> None:
+    from app.services.retrieval import RetrievalService
+
+    relevant = Chunk(
+        id="chunk-admission-conditions",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text=(
+            "一、报考条件。报名参加全国硕士研究生招生考试的人员，须符合下列条件："
+            "1. 中华人民共和国公民。2. 拥护中国共产党的领导。"
+            "3. 身体健康状况符合体检要求。"
+        ),
+        chunk_index=0,
+        tokens=["一", "报", "考", "条", "件", "报考", "条件", "硕士", "研究生"],
+        embedding=[],
+        embedding_version="",
+        metadata={},
+    )
+    vector_only = Chunk(
+        id="chunk-vector-nearby",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="中山大学研究生招生办公室联系方式和咨询电话。",
+        chunk_index=5,
+        tokens=["中山大学", "研究生", "招生", "办公室"],
+        embedding=[],
+        embedding_version="",
+        metadata={},
+    )
+    service = RetrievalService(
+        repo=RejectingDocumentRepository(),
+        vector_store=StaticVectorStore([relevant, vector_only], search_chunks=[vector_only]),
+        runtime_retrieval=RuntimeRetrievalService(tmp_path / "runtime_retrieval.json"),
+        embeddings=DisabledEmbeddings(),
+    )
+
+    results = service.search("报考中山大学研究生条件", top_k=1)
+
+    assert [item.chunk_id for item in results] == [relevant.id]
+
+
+def test_retrieval_expands_adjacent_chunks_for_section_heading_hits(tmp_path: Path) -> None:
+    from app.services.retrieval import RetrievalService
+
+    heading = Chunk(
+        id="chunk-conditions-heading",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="一、报考条件。报名参加全国硕士研究生招生考试的人员，须符合下列条件。",
+        chunk_index=0,
+        tokens=["一", "报", "考", "条", "件", "报考", "条件"],
+        embedding=[],
+        embedding_version="",
+        metadata={},
+    )
+    adjacent = Chunk(
+        id="chunk-conditions-medical",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="报考医学临床学科学术学位的人员，只接受授医学学位的毕业生报考。",
+        chunk_index=1,
+        tokens=["医学", "临床", "学术", "学位", "毕业生"],
+        embedding=[],
+        embedding_version="",
+        metadata={},
+    )
+    service = RetrievalService(
+        repo=RejectingDocumentRepository(),
+        vector_store=StaticVectorStore([heading, adjacent], search_chunks=[heading]),
+        runtime_retrieval=RuntimeRetrievalService(tmp_path / "runtime_retrieval.json"),
+        embeddings=DisabledEmbeddings(),
+    )
+
+    results = service.search("报考条件", top_k=2)
+
+    assert [item.chunk_id for item in results] == [heading.id, adjacent.id]
 
 
 def test_retrieval_debug_reports_scores_variants_and_filter_reasons(tmp_path: Path) -> None:
