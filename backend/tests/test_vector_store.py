@@ -150,6 +150,143 @@ def test_retrieval_expands_adjacent_chunks_for_section_heading_hits(tmp_path: Pa
     assert [item.chunk_id for item in results] == [heading.id, adjacent.id]
 
 
+def test_retrieval_expands_same_section_children_for_parent_heading_hits(tmp_path: Path) -> None:
+    from app.services.retrieval import RetrievalService
+
+    parent = Chunk(
+        id="chunk-conditions-parent",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="一、报考条件",
+        chunk_index=0,
+        tokens=["报", "考", "条", "件", "报考", "条件"],
+        embedding=[],
+        embedding_version="",
+        metadata={
+            "section_path": "报考条件",
+            "section_title": "报考条件",
+            "section_level": 1,
+            "section_index": 1,
+        },
+    )
+    basic = Chunk(
+        id="chunk-conditions-basic",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="报考条件 > 报名参加全国硕士研究生招生考试的人员。1. 中华人民共和国公民。",
+        chunk_index=8,
+        tokens=["报考", "条件", "中华人民共和国", "公民"],
+        embedding=[],
+        embedding_version="",
+        metadata={
+            "section_path": "报考条件 > 报名参加全国硕士研究生招生考试的人员",
+            "section_title": "报名参加全国硕士研究生招生考试的人员",
+            "section_level": 2,
+            "section_index": 2,
+        },
+    )
+    medical = Chunk(
+        id="chunk-conditions-medical",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="报考条件 > 报考医学临床学科学术学位的人员。只接受授医学学位的毕业生报考。",
+        chunk_index=12,
+        tokens=["报考", "条件", "医学", "临床", "学术", "学位"],
+        embedding=[],
+        embedding_version="",
+        metadata={
+            "section_path": "报考条件 > 报考医学临床学科学术学位的人员",
+            "section_title": "报考医学临床学科学术学位的人员",
+            "section_level": 2,
+            "section_index": 3,
+        },
+    )
+    unrelated = Chunk(
+        id="chunk-registration",
+        document_id="doc-admission",
+        document_title="Graduate Admission Guide",
+        text="二、报名。考生应完成网上报名。",
+        chunk_index=20,
+        tokens=["报名", "网上"],
+        embedding=[],
+        embedding_version="",
+        metadata={
+            "section_path": "报名",
+            "section_title": "报名",
+            "section_level": 1,
+            "section_index": 4,
+        },
+    )
+    service = RetrievalService(
+        repo=RejectingDocumentRepository(),
+        vector_store=StaticVectorStore([parent, basic, medical, unrelated], search_chunks=[parent]),
+        runtime_retrieval=RuntimeRetrievalService(tmp_path / "runtime_retrieval.json"),
+        embeddings=DisabledEmbeddings(),
+    )
+
+    results = service.search("报考条件", top_k=3)
+
+    assert [item.chunk_id for item in results] == [parent.id, basic.id, medical.id]
+
+
+def test_retrieval_recalls_multiple_admission_condition_structure_blocks(tmp_path: Path) -> None:
+    from app.services.retrieval import RetrievalService
+    from app.services.text import split_into_structured_chunks, tokenize
+
+    text = """
+中山大学2026年考试招收硕士研究生招生简章
+
+一、报考条件
+（一）报名参加全国硕士研究生招生考试的人员，须符合下列条件：
+1. 中华人民共和国公民。
+2. 拥护中国共产党的领导，遵纪守法，品德良好。
+3. 身体健康状况符合国家和中山大学规定的体检要求。
+
+（二）报考医学临床学科学术学位的人员，须符合医学培养要求。
+1. 只接受授医学学位的毕业生报考。
+
+（三）报考法律硕士（非法学）专业学位的人员，报考前所学专业为非法学专业。
+
+（四）报考工商管理、公共管理、旅游管理等管理类专业学位的人员，须符合工作年限要求。
+
+（五）报名参加单独考试的人员，须经所在单位同意并具有相应工作经历。
+
+二、报名
+考生应按教育部和学校要求完成网上报名。
+"""
+    structured_chunks = split_into_structured_chunks(text)
+    chunks = [
+        Chunk(
+            id=f"chunk-{index}",
+            document_id="doc-admission",
+            document_title="中山大学2026年考试招收硕士研究生招生简章",
+            text=item.text,
+            chunk_index=index,
+            tokens=tokenize(item.text),
+            embedding=[],
+            embedding_version="",
+            metadata=item.metadata,
+        )
+        for index, item in enumerate(structured_chunks)
+    ]
+    parent = next(chunk for chunk in chunks if chunk.metadata.get("section_path") == "报考条件")
+    service = RetrievalService(
+        repo=RejectingDocumentRepository(),
+        vector_store=StaticVectorStore(chunks, search_chunks=[parent]),
+        runtime_retrieval=RuntimeRetrievalService(tmp_path / "runtime_retrieval.json"),
+        embeddings=DisabledEmbeddings(),
+    )
+
+    results = service.search("报考条件", top_k=6)
+    section_paths = [item.metadata.get("section_path", "") for item in results]
+
+    assert any("报名参加全国硕士研究生招生考试的人员" in path for path in section_paths)
+    assert any("医学临床学科学术学位" in path for path in section_paths)
+    assert any("法律硕士（非法学）" in path for path in section_paths)
+    assert any("工商管理、公共管理、旅游管理" in path for path in section_paths)
+    assert any("单独考试" in path for path in section_paths)
+
+
 def test_retrieval_debug_reports_scores_variants_and_filter_reasons(tmp_path: Path) -> None:
     from app.services.retrieval import RetrievalService
 

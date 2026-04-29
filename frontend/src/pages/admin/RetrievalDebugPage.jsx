@@ -55,6 +55,10 @@ function summarizeFilters(candidates = []) {
   }, {});
 }
 
+function sectionPath(item) {
+  return item.section_path || item.metadata?.section_path || "";
+}
+
 function ConfigFields({ config, onChange }) {
   return (
     <div className="definition-list">
@@ -164,6 +168,7 @@ function DebugColumn({ title, debug }) {
                   <strong>
                     #{item.rank} {item.display_source || item.source}
                   </strong>
+                  {sectionPath(item) ? <small>章节 {sectionPath(item)}</small> : null}
                   <p>{truncate(item.text, 150)}</p>
                   <small>
                     总分 {item.score} / 关键词 {item.keyword_score} / 语义 {item.semantic_score} / 重排{" "}
@@ -187,7 +192,7 @@ function DebugColumn({ title, debug }) {
             </div>
             {(debug.candidates || []).slice(0, 12).map((item, index) => (
               <div key={`${title}-${item.chunk_id}-${item.query_variant}-${index}`} className="debug-candidate-row">
-                <span>{item.display_source || item.source}</span>
+                <span>{sectionPath(item) || item.display_source || item.source}</span>
                 <span>{filterLabels[item.filter_reason] || item.filter_reason}</span>
                 <span>
                   {item.score} / {item.keyword_score} / {item.semantic_score}

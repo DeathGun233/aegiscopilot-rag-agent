@@ -69,7 +69,7 @@ class RetrievalService:
             key=lambda item: (item.score, item.keyword_score, item.semantic_score, item.coverage_score),
             reverse=True,
         )
-        expanded = self._expand_adjacent_results(deduped, final_top_k)
+        expanded = self._expand_context_results(deduped, final_top_k)
         return expanded[:final_top_k]
 
     def _search_single_query(self, query: str, settings, limit: int) -> list[RetrievalResult]:
@@ -186,7 +186,10 @@ class RetrievalService:
             "settings": settings.model_dump(mode="json"),
             "query_variants": [variant.__dict__ for variant in variants],
             "candidates": debug_candidates,
-            "results": [self._debug_item_from_result(item, "selected", rank=index) for index, item in enumerate(selected_results, start=1)],
+            "results": [
+                self._debug_item_from_result(item, "selected", rank=index)
+                for index, item in enumerate(self._expand_context_results(selected_results, final_top_k), start=1)
+            ],
         }
 
     def _score_single_query_candidates(self, query: str, settings, limit: int) -> list[dict[str, object]]:
@@ -214,8 +217,8 @@ class RetrievalService:
 
         candidates: list[dict[str, object]] = []
         for chunk in candidate_chunks:
-            chunk_text = normalize_text(chunk.text).lower()
-            chunk_counter = Counter(chunk.tokens)
+            chunk_text = normalize_text(self._chunk_search_text(chunk)).lower()
+            chunk_counter = Counter([*chunk.tokens, *tokenize(self._section_search_text(chunk.metadata).lower())])
             overlap = sum(min(query_counter[token], chunk_counter[token]) for token in query_counter)
             coverage = overlap / max(len(query_counter), 1)
             density = overlap / max(len(chunk.tokens), 1)
@@ -300,8 +303,8 @@ class RetrievalService:
         query_counter = Counter(query_tokens)
         scored_chunks: list[tuple[float, object]] = []
         for chunk in self.vector_store.list_chunks():
-            chunk_text = normalize_text(chunk.text).lower()
-            chunk_counter = Counter(chunk.tokens)
+            chunk_text = normalize_text(self._chunk_search_text(chunk)).lower()
+            chunk_counter = Counter([*chunk.tokens, *tokenize(self._section_search_text(chunk.metadata).lower())])
             overlap = sum(min(query_counter[token], chunk_counter[token]) for token in query_counter)
             title_tokens = tokenize(chunk.document_title.lower())
             title_overlap = sum(1 for token in set(query_tokens) if token in title_tokens)
@@ -401,7 +404,7 @@ class RetrievalService:
                     text=chunk.text,
                     score=round(rerank_score, 4),
                     source=f"{chunk.document_title}#chunk-{chunk.chunk_index}",
-                    display_source=f"{chunk.document_title} | 片段 {chunk.chunk_index + 1}",
+                    display_source=self._display_source(chunk),
                     retrieval_method="hybrid",
                     keyword_score=round(keyword_score, 4),
                     semantic_score=round(semantic_score, 4),
@@ -411,6 +414,7 @@ class RetrievalService:
                     matched_query="",
                     query_variant="primary",
                     query_boost=1.0,
+                    metadata=dict(chunk.metadata),
                 )
             )
 
@@ -420,12 +424,12 @@ class RetrievalService:
         )
         return reranked
 
-    def _expand_adjacent_results(self, results: list[RetrievalResult], limit: int) -> list[RetrievalResult]:
+    def _expand_context_results(self, results: list[RetrievalResult], limit: int) -> list[RetrievalResult]:
         expanded: list[RetrievalResult] = []
         seen_signatures: set[str] = set()
 
         def add_result(item: RetrievalResult) -> None:
-            signature = self._result_signature(item)
+            signature = item.chunk_id or self._result_signature(item)
             if signature in seen_signatures:
                 return
             seen_signatures.add(signature)
@@ -433,6 +437,12 @@ class RetrievalService:
 
         for result in results:
             add_result(result)
+            if len(expanded) >= limit:
+                break
+            for section_result in self._same_section_chunk_results(result):
+                add_result(section_result)
+                if len(expanded) >= limit:
+                    break
             if len(expanded) >= limit:
                 break
             for adjacent in self._adjacent_chunk_results(result):
@@ -443,6 +453,48 @@ class RetrievalService:
                 break
 
         return expanded
+
+    def _same_section_chunk_results(self, result: RetrievalResult) -> list[RetrievalResult]:
+        prefix = self._section_expansion_prefix(result.metadata)
+        if not prefix:
+            return []
+        try:
+            chunks = sorted(
+                self.vector_store.list_chunks_for_document(result.document_id),
+                key=lambda item: item.chunk_index,
+            )
+        except Exception:
+            return []
+
+        section_results: list[RetrievalResult] = []
+        for chunk in chunks:
+            if chunk.id == result.chunk_id:
+                continue
+            parts = self._section_path_parts(chunk.metadata)
+            if len(parts) < len(prefix) or parts[: len(prefix)] != prefix:
+                continue
+            section_results.append(
+                RetrievalResult(
+                    chunk_id=chunk.id,
+                    document_id=chunk.document_id,
+                    document_title=chunk.document_title,
+                    text=chunk.text,
+                    score=round(max(result.score - 0.01, settings.min_grounding_score), 4),
+                    source=f"{chunk.document_title}#chunk-{chunk.chunk_index}",
+                    display_source=self._display_source(chunk),
+                    retrieval_method="section",
+                    keyword_score=result.keyword_score,
+                    semantic_score=result.semantic_score,
+                    semantic_source=result.semantic_source,
+                    rerank_score=result.rerank_score,
+                    coverage_score=result.coverage_score,
+                    matched_query=result.matched_query,
+                    query_variant=result.query_variant,
+                    query_boost=result.query_boost,
+                    metadata=dict(chunk.metadata),
+                )
+            )
+        return section_results
 
     def _adjacent_chunk_results(self, result: RetrievalResult) -> list[RetrievalResult]:
         try:
@@ -467,7 +519,7 @@ class RetrievalService:
                     text=chunk.text,
                     score=round(max(result.score - 0.02 * abs(offset), settings.min_grounding_score), 4),
                     source=f"{chunk.document_title}#chunk-{chunk.chunk_index}",
-                    display_source=f"{chunk.document_title} | 片段 {chunk.chunk_index + 1}",
+                    display_source=self._display_source(chunk),
                     retrieval_method="adjacent",
                     keyword_score=result.keyword_score,
                     semantic_score=result.semantic_score,
@@ -477,9 +529,50 @@ class RetrievalService:
                     matched_query=result.matched_query,
                     query_variant=result.query_variant,
                     query_boost=result.query_boost,
+                    metadata=dict(chunk.metadata),
                 )
             )
         return adjacent_results
+
+    @staticmethod
+    def _chunk_search_text(chunk) -> str:
+        section_text = RetrievalService._section_search_text(chunk.metadata)
+        if not section_text:
+            return chunk.text
+        return f"{section_text}\n{chunk.text}"
+
+    @staticmethod
+    def _section_search_text(metadata: dict[str, Any]) -> str:
+        values: list[str] = []
+        for key in ("section_path", "section_title", "section_parent_path", "section_root_title"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value:
+                values.append(value)
+        return " ".join(values)
+
+    @staticmethod
+    def _display_source(chunk) -> str:
+        section_path = chunk.metadata.get("section_path", "")
+        if isinstance(section_path, str) and section_path:
+            return f"{chunk.document_title} | {section_path} | 片段 {chunk.chunk_index + 1}"
+        return f"{chunk.document_title} | 片段 {chunk.chunk_index + 1}"
+
+    @staticmethod
+    def _section_path_parts(metadata: dict[str, Any]) -> list[str]:
+        parts = metadata.get("section_path_parts")
+        if isinstance(parts, list):
+            return [str(item) for item in parts if str(item)]
+        section_path = metadata.get("section_path")
+        if isinstance(section_path, str) and section_path:
+            return [item.strip() for item in section_path.split(">") if item.strip()]
+        return []
+
+    @staticmethod
+    def _section_expansion_prefix(metadata: dict[str, Any]) -> list[str]:
+        parts = RetrievalService._section_path_parts(metadata)
+        if not parts:
+            return []
+        return parts[:1]
 
     @staticmethod
     def _chunk_index_from_result(result: RetrievalResult) -> int:
@@ -498,7 +591,7 @@ class RetrievalService:
             "text": chunk.text,
             "score": float(item["hybrid_score"]),
             "source": f"{chunk.document_title}#chunk-{chunk.chunk_index}",
-            "display_source": f"{chunk.document_title} | chunk {chunk.chunk_index + 1}",
+            "display_source": RetrievalService._display_source(chunk),
             "retrieval_method": "hybrid",
             "keyword_score": float(item["keyword_score"]),
             "semantic_score": float(item["semantic_score"]),
@@ -510,6 +603,8 @@ class RetrievalService:
             "query_boost": variant.boost,
             "filter_reason": filter_reason,
             "rank": None,
+            "metadata": dict(chunk.metadata),
+            "section_path": chunk.metadata.get("section_path", ""),
         }
 
     @staticmethod
@@ -533,6 +628,8 @@ class RetrievalService:
             "query_boost": item.query_boost,
             "filter_reason": filter_reason,
             "rank": rank,
+            "metadata": dict(item.metadata),
+            "section_path": item.metadata.get("section_path", ""),
         }
 
     @staticmethod
