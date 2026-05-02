@@ -185,21 +185,20 @@ class MilvusVectorStore:
     def _query_all(self, *, filter_value: str) -> list[object]:
         records: list[object] = []
         page_size = max(int(self.query_limit), 1)
-        offset = 0
-        while True:
-            page = self.client.query(
-                collection_name=self.collection,
-                filter=filter_value,
-                output_fields=self.output_fields,
-                limit=page_size,
-                offset=offset,
-            )
-            if not page:
-                break
-            records.extend(page)
-            if len(page) < page_size:
-                break
-            offset += page_size
+        iterator = self.client.query_iterator(
+            collection_name=self.collection,
+            filter=filter_value,
+            output_fields=self.output_fields,
+            batch_size=page_size,
+        )
+        try:
+            while True:
+                page = iterator.next()
+                if not page:
+                    break
+                records.extend(page)
+        finally:
+            iterator.close()
         return records
 
     def _chunk_to_record(self, chunk: Chunk) -> dict[str, object]:
@@ -241,6 +240,8 @@ class MilvusVectorStore:
 
     @staticmethod
     def _flatten_record(raw: Any) -> dict[str, Any]:
+        if not isinstance(raw, dict) and hasattr(raw, "to_dict"):
+            raw = raw.to_dict()
         if isinstance(raw, dict):
             record = dict(raw)
         else:

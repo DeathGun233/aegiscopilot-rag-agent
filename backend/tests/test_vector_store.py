@@ -517,6 +517,21 @@ def test_milvus_vector_store_pages_list_and_stats_queries(monkeypatch: pytest.Mo
             "metadata_json": "{}",
         }
 
+    class FakeQueryIterator:
+        def __init__(self, records: list[dict[str, object]], *, batch_size: int) -> None:
+            self.records = records
+            self.batch_size = batch_size
+            self.offset = 0
+            self.closed = False
+
+        def next(self) -> list[dict[str, object]]:
+            page = self.records[self.offset : self.offset + self.batch_size]
+            self.offset += self.batch_size
+            return page
+
+        def close(self) -> None:
+            self.closed = True
+
     class FakeMilvusClient:
         def __init__(self, *, uri: str, token: str | None = None) -> None:
             self.records = [
@@ -532,15 +547,17 @@ def test_milvus_vector_store_pages_list_and_stats_queries(monkeypatch: pytest.Mo
             return True
 
         def query(self, **kwargs: object) -> list[dict[str, object]]:
+            raise AssertionError("list queries must use query_iterator instead of offset pagination")
+
+        def query_iterator(self, **kwargs: object) -> FakeQueryIterator:
             self.query_calls.append(kwargs)
-            limit = int(kwargs.get("limit", 100))
-            offset = int(kwargs.get("offset", 0))
+            batch_size = int(kwargs.get("batch_size", 100))
             items = self.records
             if kwargs.get("filter") == '"doc-a"':
                 items = [item for item in self.records if item["document_id"] == "doc-a"]
             if kwargs.get("filter") == 'document_id == "doc-a"':
                 items = [item for item in self.records if item["document_id"] == "doc-a"]
-            return items[offset : offset + limit]
+            return FakeQueryIterator(items, batch_size=batch_size)
 
     monkeypatch.setitem(
         __import__("sys").modules,
